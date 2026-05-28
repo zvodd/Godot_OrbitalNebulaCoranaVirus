@@ -1,0 +1,86 @@
+[gd_scene format=3 uid="uid://cr3k35qmishsx"]
+
+[ext_resource type="Script" uid="uid://ducvjox0fxivs" path="res://script/MultiMeshManager.gd" id="1_pw5ps"]
+[ext_resource type="Script" uid="uid://dv8j4hqg1djjm" path="res://script/scene_multi_demo.gd" id="1_wrh8q"]
+[ext_resource type="Shader" uid="uid://bf7fq7ewucxjg" path="res://materials/shader_sky.gdshader" id="2_jl85b"]
+[ext_resource type="Resource" uid="uid://nf4l4e4ur1cn" path="res://assets/multi_mesh/TestGeomOutUntitled_gn_pool.tres" id="2_qdg34"]
+[ext_resource type="Texture2D" uid="uid://cnwndpvljgyv2" path="res://assets/rainbow_nebula.webp" id="3_lltr0"]
+[ext_resource type="ArrayMesh" uid="uid://cwlgjymb8batu" path="res://assets/multi_mesh/TestGeomOutUntitled_Cube.res" id="3_qdg34"]
+[ext_resource type="Script" uid="uid://xvdkg34ou0yp" path="res://script/orbit_cam.gd" id="5_0w53f"]
+[ext_resource type="Shader" uid="uid://b1p3cugfnltk7" path="res://materials/canvas_crosshair.gdshader" id="6_0hltt"]
+[ext_resource type="Shader" uid="uid://uycd85lgdj3t" path="res://materials/shader_cool_surface.gdshader" id="9_4hhmk"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_lltr0"]
+shader = ExtResource("2_jl85b")
+shader_parameter/sky_tex = ExtResource("3_lltr0")
+
+[sub_resource type="Sky" id="Sky_0w53f"]
+sky_material = SubResource("ShaderMaterial_lltr0")
+
+[sub_resource type="Environment" id="Environment_0hltt"]
+background_mode = 2
+sky = SubResource("Sky_0w53f")
+tonemap_mode = 2
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_jl85b"]
+shader = ExtResource("6_0hltt")
+shader_parameter/crosshair_color = Color(0.12006738, 0.1475623, 0.14123741, 1)
+shader_parameter/thickness = 4.890000184774999
+shader_parameter/gap = 12.5210005947475
+shader_parameter/length = 29.658001361255
+shader_parameter/border_color = Color(0, 0, 0, 0)
+shader_parameter/border_thickness = 0.0
+shader_parameter/aa_mul = 1.0
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_env1d"]
+render_priority = 0
+shader = ExtResource("9_4hhmk")
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_0hltt"]
+radius = 1.0
+
+[node name="Node3D" type="Node3D" unique_id=2079355374 node_paths=PackedStringArray("cam", "manager")]
+script = ExtResource("1_wrh8q")
+cam = NodePath("Camera3D")
+manager = NodePath("MultiMeshManager")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=476936466]
+environment = SubResource("Environment_0hltt")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1908630345]
+transform = Transform3D(-0.8660254, -0.43301278, 0.25, 0, 0.49999997, 0.86602545, -0.50000006, 0.75, -0.43301266, 0, 0, 0)
+shadow_enabled = true
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=1082739024]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 3.9292874)
+script = ExtResource("5_0w53f")
+
+[node name="ColorRectCrosshair" type="ColorRect" parent="Camera3D" unique_id=1770325190]
+material = SubResource("ShaderMaterial_jl85b")
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -20.0
+offset_top = -20.0
+offset_right = 20.0
+offset_bottom = 20.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 4
+mouse_filter = 2
+
+[node name="MultiMeshManager" type="Node3D" parent="." unique_id=518612712]
+script = ExtResource("1_pw5ps")
+pool = ExtResource("2_qdg34")
+metadata/_custom_type_script = "uid://ducvjox0fxivs"
+
+[node name="Area3D" type="Area3D" parent="." unique_id=5425506]
+
+[node name="TestGeomOutUntitledCube" type="MeshInstance3D" parent="Area3D" unique_id=1709674505]
+mesh = ExtResource("3_qdg34")
+surface_material_override/0 = SubResource("ShaderMaterial_env1d")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Area3D" unique_id=831620840]
+shape = SubResource("SphereShape3D_0hltt")
