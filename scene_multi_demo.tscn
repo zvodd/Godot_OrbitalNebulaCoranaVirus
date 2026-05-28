@@ -4,7 +4,7 @@
 [ext_resource type="Script" uid="uid://dv8j4hqg1djjm" path="res://script/scene_multi_demo.gd" id="1_wrh8q"]
 [ext_resource type="Shader" uid="uid://bf7fq7ewucxjg" path="res://materials/shader_sky.gdshader" id="2_jl85b"]
 [ext_resource type="Resource" uid="uid://nf4l4e4ur1cn" path="res://assets/multi_mesh/TestGeomOutUntitled_gn_pool.tres" id="2_qdg34"]
-[ext_resource type="Texture2D" uid="uid://cnwndpvljgyv2" path="res://assets/rainbow_nebula.webp" id="3_lltr0"]
+[ext_resource type="Texture2D" uid="uid://cm411apspwplp" path="res://assets/rainbow_nebula.webp" id="3_lltr0"]
 [ext_resource type="ArrayMesh" uid="uid://cwlgjymb8batu" path="res://assets/multi_mesh/TestGeomOutUntitled_Cube.res" id="3_qdg34"]
 [ext_resource type="Script" uid="uid://xvdkg34ou0yp" path="res://script/orbit_cam.gd" id="5_0w53f"]
 [ext_resource type="Shader" uid="uid://b1p3cugfnltk7" path="res://materials/canvas_crosshair.gdshader" id="6_0hltt"]
@@ -13,6 +13,10 @@
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_lltr0"]
 shader = ExtResource("2_jl85b")
 shader_parameter/sky_tex = ExtResource("3_lltr0")
+shader_parameter/blend_center = 0.98
+shader_parameter/blend_width = 0.02
+shader_parameter/side_uv_scale = Vector2(4, 3.14159)
+shader_parameter/top_uv_scale = Vector2(3.14159, 3.14159)
 
 [sub_resource type="Sky" id="Sky_0w53f"]
 sky_material = SubResource("ShaderMaterial_lltr0")
