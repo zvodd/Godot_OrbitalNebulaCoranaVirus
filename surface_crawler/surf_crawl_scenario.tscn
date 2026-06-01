@@ -5,10 +5,9 @@
 [ext_resource type="Script" uid="uid://xvdkg34ou0yp" path="res://script/orbit_cam.gd" id="3_00jou"]
 [ext_resource type="Shader" uid="uid://b1p3cugfnltk7" path="res://materials/canvas_crosshair.gdshader" id="4_w8i3o"]
 [ext_resource type="Shader" uid="uid://ck8lm04nxyx16" path="res://materials/shader_cool_surface2.gdshader" id="5_t8tm5"]
-[ext_resource type="Script" uid="uid://deb4l6jrj2ghs" path="res://surface_agent.gd" id="6_xm7km"]
+[ext_resource type="Script" uid="uid://deb4l6jrj2ghs" path="res://surface_crawler/surface_movementer.gd" id="6_xm7km"]
 [ext_resource type="Shader" uid="uid://uycd85lgdj3t" path="res://materials/shader_cool_surface.gdshader" id="7_pirli"]
 [ext_resource type="Script" uid="uid://c6akoh3ciw367" path="res://surface_crawler/surface_navigator.gd" id="8_qoqdx"]
-[ext_resource type="Script" uid="uid://bpbfhyx8v2nya" path="res://surface_sampler.gd" id="9_awri1"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_vhkxs"]
 shader = ExtResource("1_pfv61")
@@ -125,22 +124,17 @@ shape = SubResource("ConcavePolygonShape3D_suhkm")
 mesh = SubResource("ArrayMesh_qd3ma")
 surface_material_override/0 = SubResource("ShaderMaterial_ns8op")
 
-[node name="SurfaceAgent" type="Node3D" parent="." unique_id=953575590 node_paths=PackedStringArray("navigator", "sampler")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6.214428, 0)
-script = ExtResource("6_xm7km")
-navigator = NodePath("SurfaceNavigator")
-sampler = NodePath("SurfaceSampler")
-metadata/_custom_type_script = "uid://deb4l6jrj2ghs"
-
-[node name="SomeGuy" type="MeshInstance3D" parent="SurfaceAgent" unique_id=1921312040]
-transform = Transform3D(3, 0, 0, 0, 3, 0, 0, 0, 3, 0, 0, 0)
+[node name="SomeGuy" type="MeshInstance3D" parent="." unique_id=1921312040]
+transform = Transform3D(3, 0, 0, 0, 3, 0, 0, 0, 3, 0, 6.214428, 0)
 mesh = SubResource("PrismMesh_niprg")
 surface_material_override/0 = SubResource("ShaderMaterial_2iyku")
 
-[node name="SurfaceNavigator" type="Node3D" parent="SurfaceAgent" unique_id=377625987]
+[node name="SurfaceNavigator" type="Node3D" parent="SomeGuy" unique_id=377625987]
+transform = Transform3D(0.33333334, 0, 0, 0, 0.33333334, 0, 0, 0, 0.33333334, 0, 0, 0)
 script = ExtResource("8_qoqdx")
 metadata/_custom_type_script = "uid://c6akoh3ciw367"
 
-[node name="SurfaceSampler" type="Node3D" parent="SurfaceAgent" unique_id=1376922878]
-script = ExtResource("9_awri1")
-metadata/_custom_type_script = "uid://bpbfhyx8v2nya"
+[node name="SurfaceMovementComponent" type="Node3D" parent="SomeGuy" unique_id=1925377251 node_paths=PackedStringArray("navigator")]
+script = ExtResource("6_xm7km")
+navigator = NodePath("../SurfaceNavigator")
+metadata/_custom_type_script = "uid://deb4l6jrj2ghs"

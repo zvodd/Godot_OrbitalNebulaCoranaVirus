@@ -53,17 +53,21 @@ func find_path(start_pos: Vector3, start_normal: Vector3, target: Vector3) -> Ar
 
 func _get_neighbors(node: SurfaceNode, target: Vector3) -> Array[SurfaceNode]:
 	var neighbors: Array[SurfaceNode] = []
-	var basis_tangent := node.normal.cross(Vector3.UP if abs(node.normal.y) < 0.9 else Vector3.RIGHT)
+	# Ensure axis is unit length for .rotated()
+	var norm := node.normal.normalized()
+	
+	var basis_tangent := norm.cross(Vector3.UP if abs(norm.y) < 0.9 else Vector3.RIGHT).normalized()
 	
 	for i in range(6):
-		var dir := basis_tangent.rotated(node.normal, i * PI/3.0).normalized()
-		var hit := _run_3_ray_probe(node.pos, node.normal, dir)
+		# Use normalized 'norm' as axis
+		var dir := basis_tangent.rotated(norm, i * PI/3.0)
+		var hit := _run_3_ray_probe(node.pos, norm, dir)
 		
 		if hit.is_empty(): continue
 		
 		var n := SurfaceNode.new()
 		n.pos = hit.position
-		n.normal = hit.normal
+		n.normal = hit.normal # Raycast hits are usually unit, but .normalized() here is safer
 		n.parent = node
 		n.g_cost = node.g_cost + node.pos.distance_to(n.pos)
 		n.h_cost = n.pos.distance_to(target) * h_weight
