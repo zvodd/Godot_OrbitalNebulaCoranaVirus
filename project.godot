@@ -19,7 +19,6 @@ config/icon="res://icon.svg"
 
 project/assembly_name="Levepro"
 
-
 [physics]
 
 3d/physics_engine="Jolt Physics"
