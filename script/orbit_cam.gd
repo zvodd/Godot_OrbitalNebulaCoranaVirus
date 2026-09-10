@@ -12,6 +12,8 @@ extends Camera3D
 @export var min_dist := 2.8
 @export var max_dist := 8.0
 
+@export var target : Node3D
+
 var yaw := 0.0
 var pitch := 0.0
 var velocity := Vector2.ZERO
@@ -21,7 +23,7 @@ var mouse_buffer := Vector2.ZERO
 
 func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-	pivot_transform.origin = get_parent().global_position
+	
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
@@ -38,6 +40,7 @@ func _input(event: InputEvent) -> void:
 
 func _process(delta: float) -> void:
 	_apply_buffered_input()
+	pivot_transform.origin = get_parent().global_position if  target == null else target.global_position
 	
 	# Apply velocity
 	yaw += velocity.x
