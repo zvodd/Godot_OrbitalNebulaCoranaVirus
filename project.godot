@@ -11,13 +11,20 @@ config_version=5
 [application]
 
 config/name="Nebula"
-run/main_scene="uid://cr3k35qmishsx"
+run/main_scene="res://game/main.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://icon.svg"
 
 [dotnet]
 
 project/assembly_name="Levepro"
+
+[layer_names]
+
+3d_physics/layer_1="terrain"
+3d_physics/layer_2="ore_chunks"
+3d_physics/layer_3="crawlers"
+3d_physics/layer_4="player_collector"
 
 [physics]
 

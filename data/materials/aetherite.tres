@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="MaterialDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/defs/material_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+name = "Aetherite"
+color = Color(0.2, 1, 0.7, 1)
+min_power = 60.0
+hardness = 30
+instant_threshold = 40
+ore_id = &"aetherite"
+chunk_volume = 3
+chunk_mass = 3

@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="MaterialDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/defs/material_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+name = "Sand"
+color = Color(0.82, 0.68, 0.42, 1)
+min_power = 0.3
+hardness = 2
+instant_threshold = 8

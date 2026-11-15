@@ -9,14 +9,31 @@
 | Milestone | State | Notes |
 |---|---|---|
 | M0 Docs & brief | ✅ done | GDD + this roadmap + CLAUDE.md |
-| M1 Icosphere lattice & planet data | ⏳ next | |
-| M2 Mesh extraction, chunks, collision | ⬜ | |
-| M3 Gyro aim + laser (types, lenses, materials) | ⬜ | |
-| M4 Ore chunks, tractor beam, collector, HUD | ⬜ | |
-| M5 Round loop: fuel, end screen, upgrades, persistence | ⬜ | |
+| M1 Icosphere lattice & planet data | ✅ done | `game/planet/` icosphere, grid, generator; `tests/test_planet_core.gd`. Debug lattice-point cutaway scene skipped. |
+| M2 Mesh extraction, chunks, collision | ✅ done | Marching tets, 320 chunks, trimesh collision, 4 ms dirty budget. ~1.6 ms avg / ~7 ms worst chunk. Normals are gradient-based (seamless across chunks), mesh is non-indexed. |
+| M3 Gyro aim + laser (types, lenses, materials) | 🟡 playable | Trackball rig, 3 laser types, 3 lenses, reach limit. All types/lenses unlocked (no upgrades yet). Needs feel/tuning pass by the designer. |
+| M4 Ore chunks, tractor beam, collector, HUD | 🟡 playable | Chunks, radial gravity, tractor cone with line of sight, collector, placeholder HUD + F3 overlay. No fuel bar (M5). |
+| M5 Round loop: fuel, end screen, upgrades, persistence | ⏳ next | |
 | M6 Crawlers | ⬜ | |
 | M7 Shell collapse + depth limit polish | ⬜ | |
 | M8 Balance & feel pass | ⬜ | |
+
+**As built (2026-11-15), where it differs from the sections below:**
+- Main scene is `game/main.tscn` (`run/main_scene` now points at it). Tests:
+  `godot --headless -s tests/test_planet_core.gd` and
+  `godot --headless --fixed-fps 60 -s tests/test_gameplay.gd`. Run `--headless --import` once
+  after adding a `class_name`.
+- The two boundary rows are **real storage rows** (row 0 = core, last row = air), so
+  `rows = K + 2` and `radius(k) = core_radius + (k − 1)·dr`. `PlanetDef.shells` is ordered
+  **outside → in** (shell 0 = crust).
+- `MaterialDef` has `ore_id` / `chunk_volume` / `chunk_mass` instead of an `OreDef` reference;
+  `OreDef` is a shell ore-table entry (material, count range, size range).
+- `LaserTypeDef` has a single `power` (no per-material table). Per-cell power =
+  `power × focus ÷ max(lens area ÷ 1.4, 1)`. Carve maths lives in the node-free
+  `game/tools/laser_carve.gd`. The beam only cuts **exposed** cells (layer by layer), using a
+  short capsule along the beam so pits keep the lens width.
+- Debug keys so far: F3 overlay, F7 crater at aim, F9 new planet. Not done: F5/F6/F8, live-chunk
+  merge is implemented but untested at the 150 cap.
 
 ---
 

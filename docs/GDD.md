@@ -225,6 +225,8 @@ same tools; a "laser satellite" upgrade is literally another one of these.
 | 2026-11-15 | The gyro is a big satellite orbiting freely (poles included); the planet stays still. |
 | 2026-11-15 | Shell collapse reveals the next surface and lowers the satellite's orbit (planet looks bigger, beam reaches deeper). Stages after unlock: decide after playtesting. |
 | 2026-11-15 | Crawlers corrupt ore around them over time instead of locking a whole deposit; death releases a plasma burst that cleanses non-permanent corruption; upgrades enlarge the burst. |
+| 2026-11-15 | First playable (M1–M4 core): all laser types and lenses are unlocked until the upgrade system exists; no fuel yet. Starting numbers live in `data/` and are untuned (sand currently digs fast with Thermal). |
+| 2026-11-15 | The beam cuts only exposed cells, so ore is always revealed before it is eaten. Crosshair is drawn where the beam lands, not at screen centre. |
 
 ## 10. Open questions
 

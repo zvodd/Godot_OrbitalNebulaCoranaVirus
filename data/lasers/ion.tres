@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="LaserTypeDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/defs/laser_type_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+name = "Ion"
+power = 400
+reach = 42
+fuel_per_sec = 6
+beam_color = Color(0.3, 0.9, 1, 1)

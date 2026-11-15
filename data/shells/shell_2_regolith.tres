@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="ShellDef" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://game/defs/shell_def.gd" id="1"]
+[ext_resource type="Script" path="res://game/defs/ore_def.gd" id="2"]
+[ext_resource type="Resource" path="res://data/materials/sand.tres" id="3"]
+[ext_resource type="Resource" path="res://data/materials/rock.tres" id="4"]
+[ext_resource type="Resource" path="res://data/materials/copper.tres" id="5"]
+
+[sub_resource type="Resource" id="ore_0"]
+script = ExtResource("2")
+material = ExtResource("5")
+count_min = 22
+count_max = 30
+size_min = 50
+size_max = 130
+
+[resource]
+script = ExtResource("1")
+name = "Regolith"
+rows = 3
+base_material = ExtResource("3")
+secondary_material = ExtResource("4")
+secondary_amount = 0.42
+noise_frequency = 0.08
+ores = Array[ExtResource("2")]([SubResource("ore_0")])

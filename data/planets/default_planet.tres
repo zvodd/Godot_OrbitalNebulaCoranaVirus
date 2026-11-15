@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="PlanetDef" load_steps=12 format=3]
+
+[ext_resource type="Script" path="res://game/defs/planet_def.gd" id="1"]
+[ext_resource type="Script" path="res://game/defs/shell_def.gd" id="2"]
+[ext_resource type="Resource" path="res://data/materials/core.tres" id="3"]
+[ext_resource type="Resource" path="res://data/shells/shell_1_crust.tres" id="4"]
+[ext_resource type="Resource" path="res://data/shells/shell_2_regolith.tres" id="5"]
+[ext_resource type="Resource" path="res://data/shells/shell_3_upper_mantle.tres" id="6"]
+[ext_resource type="Resource" path="res://data/shells/shell_4_mantle.tres" id="7"]
+[ext_resource type="Resource" path="res://data/shells/shell_5_lower_mantle.tres" id="8"]
+[ext_resource type="Resource" path="res://data/shells/shell_6_deep_rock.tres" id="9"]
+[ext_resource type="Resource" path="res://data/shells/shell_7_outer_core.tres" id="10"]
+[ext_resource type="Resource" path="res://data/shells/shell_8_inner_core.tres" id="11"]
+
+[resource]
+script = ExtResource("1")
+subdivision = 5
+patch_level = 2
+core_radius = 8.0
+row_spacing = 1.0
+core_material = ExtResource("3")
+shells = Array[ExtResource("2")]([ExtResource("4"), ExtResource("5"), ExtResource("6"), ExtResource("7"), ExtResource("8"), ExtResource("9"), ExtResource("10"), ExtResource("11")])

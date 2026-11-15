@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="ShellDef" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://game/defs/shell_def.gd" id="1"]
+[ext_resource type="Script" path="res://game/defs/ore_def.gd" id="2"]
+[ext_resource type="Resource" path="res://data/materials/rock.tres" id="3"]
+[ext_resource type="Resource" path="res://data/materials/iridium.tres" id="4"]
+[ext_resource type="Resource" path="res://data/materials/aetherite.tres" id="5"]
+
+[sub_resource type="Resource" id="ore_0"]
+script = ExtResource("2")
+material = ExtResource("4")
+count_min = 10
+count_max = 14
+size_min = 100
+size_max = 200
+
+[sub_resource type="Resource" id="ore_1"]
+script = ExtResource("2")
+material = ExtResource("5")
+count_min = 10
+count_max = 16
+size_min = 80
+size_max = 160
+
+[resource]
+script = ExtResource("1")
+name = "Outer Core"
+rows = 3
+base_material = ExtResource("3")
+secondary_amount = 0
+noise_frequency = 0.1
+ores = Array[ExtResource("2")]([SubResource("ore_0"), SubResource("ore_1")])

@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="ShellDef" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://game/defs/shell_def.gd" id="1"]
+[ext_resource type="Script" path="res://game/defs/ore_def.gd" id="2"]
+[ext_resource type="Resource" path="res://data/materials/sand.tres" id="3"]
+[ext_resource type="Resource" path="res://data/materials/rock.tres" id="4"]
+[ext_resource type="Resource" path="res://data/materials/copper.tres" id="5"]
+
+[sub_resource type="Resource" id="ore_0"]
+script = ExtResource("2")
+material = ExtResource("5")
+count_min = 26
+count_max = 34
+size_min = 40
+size_max = 110
+
+[resource]
+script = ExtResource("1")
+name = "Crust"
+rows = 3
+base_material = ExtResource("3")
+secondary_material = ExtResource("4")
+secondary_amount = 0.22
+noise_frequency = 0.07
+ores = Array[ExtResource("2")]([SubResource("ore_0")])

@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="MaterialDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/defs/material_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+name = "Core"
+color = Color(0.32, 0.07, 0.05, 1)
+min_power = inf
+hardness = 1
+instant_threshold = 1e+09

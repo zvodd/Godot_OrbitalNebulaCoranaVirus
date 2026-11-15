@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="MaterialDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/defs/material_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+name = "Iridium"
+color = Color(0.88, 0.93, 1, 1)
+min_power = 40.0
+hardness = 20
+instant_threshold = 30
+ore_id = &"iridium"
+chunk_volume = 3
+chunk_mass = 2.5

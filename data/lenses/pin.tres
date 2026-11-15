@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="LensDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/defs/lens_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+name = "Pin"
+pattern = 0
+spread = 0.7
+focus = 1

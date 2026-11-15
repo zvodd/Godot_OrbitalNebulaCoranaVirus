@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="MaterialDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/defs/material_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+name = "Rock"
+color = Color(0.42, 0.41, 0.45, 1)
+min_power = 12.0
+hardness = 10
+instant_threshold = 20

@@ -1,0 +1,34 @@
+[gd_resource type="Resource" script_class="ShellDef" load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://game/defs/shell_def.gd" id="1"]
+[ext_resource type="Script" path="res://game/defs/ore_def.gd" id="2"]
+[ext_resource type="Resource" path="res://data/materials/rock.tres" id="3"]
+[ext_resource type="Resource" path="res://data/materials/sand.tres" id="4"]
+[ext_resource type="Resource" path="res://data/materials/copper.tres" id="5"]
+[ext_resource type="Resource" path="res://data/materials/cobalt.tres" id="6"]
+
+[sub_resource type="Resource" id="ore_0"]
+script = ExtResource("2")
+material = ExtResource("5")
+count_min = 12
+count_max = 18
+size_min = 60
+size_max = 140
+
+[sub_resource type="Resource" id="ore_1"]
+script = ExtResource("2")
+material = ExtResource("6")
+count_min = 14
+count_max = 20
+size_min = 50
+size_max = 120
+
+[resource]
+script = ExtResource("1")
+name = "Upper Mantle"
+rows = 3
+base_material = ExtResource("3")
+secondary_material = ExtResource("4")
+secondary_amount = 0.35
+noise_frequency = 0.08
+ores = Array[ExtResource("2")]([SubResource("ore_0"), SubResource("ore_1")])

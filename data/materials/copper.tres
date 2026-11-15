@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="MaterialDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/defs/material_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+name = "Copper"
+color = Color(0.9, 0.42, 0.16, 1)
+min_power = 1.5
+hardness = 3
+instant_threshold = 10
+ore_id = &"copper"
+chunk_volume = 3
+chunk_mass = 1

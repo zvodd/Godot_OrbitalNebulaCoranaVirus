@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="LaserTypeDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://game/defs/laser_type_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+name = "Thermal"
+power = 10
+reach = 30
+fuel_per_sec = 1
+beam_color = Color(1, 0.45, 0.12, 1)
