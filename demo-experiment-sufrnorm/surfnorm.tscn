@@ -1,0 +1,32 @@
+[gd_scene format=3 uid="uid://un76mj2ewfip"]
+
+[ext_resource type="ArrayMesh" uid="uid://cwlgjymb8batu" path="res://assets/multi_mesh/TestGeomOutUntitled_Cube.res" id="1_esadl"]
+[ext_resource type="Shader" uid="uid://cm7gfjdmpatab" path="res://demo-experiment-sufrnorm/surfnorm.gdshader" id="2_wvh74"]
+[ext_resource type="Script" uid="uid://d0j8eimv0y4xe" path="res://demo-experiment-sufrnorm/orbit.gd" id="3_nb8bt"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_qkia5"]
+render_priority = 0
+shader = ExtResource("2_wvh74")
+
+[node name="Node3D" type="Node3D" unique_id=993718182]
+
+[node name="TestGeomOutUntitledCube" type="MeshInstance3D" parent="." unique_id=1471796677]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.4120002, 0.2787676, 0.17659521)
+mesh = ExtResource("1_esadl")
+surface_material_override/0 = SubResource("ShaderMaterial_qkia5")
+
+[node name="Node3D" type="Camera3D" parent="TestGeomOutUntitledCube" unique_id=626544803 node_paths=PackedStringArray("target")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.2934265, -0.2787676, 4.1206694)
+script = ExtResource("3_nb8bt")
+target = NodePath("..")
+
+[node name="Node3D" type="Node3D" parent="." unique_id=42263090]
+
+[node name="TestGeomOutUntitledCube2" type="MeshInstance3D" parent="Node3D" unique_id=2012196245]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.23196316, 0.2787676, 0.17659521)
+mesh = ExtResource("1_esadl")
+surface_material_override/0 = SubResource("ShaderMaterial_qkia5")
+script = ExtResource("3_nb8bt")
+distance = 0.2
+min_dist = 0.2
+max_dist = 0.9
