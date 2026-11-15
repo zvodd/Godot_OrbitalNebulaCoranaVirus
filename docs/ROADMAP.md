@@ -71,7 +71,7 @@ game/
   player/
     gyro_rig.gd             # merged orbit/trackball camera + emitter mount
   run/
-    run_state.gd            # fuel, round timer, round-scoped locks, end-of-round
+    run_state.gd            # fuel, round timer, round-end corruption clear, end-of-round
     meta.gd                 # AUTOLOAD: ore bank, upgrade levels, derived stats, save/load
   ui/
     hud.tscn/.gd  upgrade_screen.tscn/.gd  debug_overlay.gd
@@ -104,11 +104,14 @@ Navigator and terrain carving rays use mask = terrain only.
     < 1/255 per frame.)
   - `material: PackedByteArray` — index into material table.
   - `deposit: PackedInt32Array` — −1 or deposit id.
+  - `corruption: PackedByteArray` — 0 clean, 1..254 corrupted and growing, **255 rooted**
+    (permanent). Any value > 0 makes the cell uncuttable. See §8.
 - Virtual boundary: row `K` is always air (so the surface triangulates); row `−1` is always solid
   (core).
 - **Shells**: `ShellDef` resources, each covering a contiguous row range (MVP 8 shells × 3 rows).
   `shell_of_row[k]`. Per-shell bookkeeping: `initial_solid`, `removed_solid` → `cleared_fraction`.
 - `outermost_intact_shell` (int; starts at the top shell, moves inward on collapse).
+  `surface_radius` = top radius of that shell. The satellite's `orbit_radius` derives from it (§6.1).
 
 ### 4.3 Generation (`planet_generator.gd`)
 - Everything derives from `seed` via `RandomNumberGenerator` + `FastNoiseLite` seeded
@@ -116,7 +119,7 @@ Navigator and terrain carving rays use mask = terrain only.
 - Per point: shell's base material mix chosen by 3D noise (e.g. sand vs rock bands).
 - Deposits: per shell, `N` seeds from the shell's ore table (`OreDef`: ore material, count range,
   size range); flood-fill over lattice neighbours (lateral adjacency + row ±1) to the target size.
-  Store `Deposit {id, ore_material, cells: PackedInt32Array, exposed, locked, locked_by}`.
+  Store `Deposit {id, ore_material, cells: PackedInt32Array, exposed, occupied_by}`.
 
 ### 4.4 Queries
 - `world_to_lattice(p)` → (vertex via LUT+walk, row via `round((|p|−r_core)/dr)`).
@@ -145,7 +148,8 @@ by material/shell with a cutaway.
 - Standard marching-tetrahedra (16 cases), interpolate on `fill − 0.5`.
 - **Early-out**: skip a prism if all 6 corners are on the same side of iso. Most prisms skip.
 - Per-vertex data: position, normal, `COLOR` = material colour of the solid endpoint
-  (`CUSTOM0` can carry material id / heat / locked flag for later shader effects).
+  (`CUSTOM0` can carry material id / heat / corruption for shader effects; corruption tint is
+  needed by M6).
 - Normals: MVP = accumulate face normals per deduplicated edge-vertex (key = sorted lattice index pair),
   then normalize. Gradient-based normals optional later.
 - `planet_mesher.gd` is **pure data in → arrays out** (no nodes) so it can be ported/threaded.
@@ -169,17 +173,25 @@ collision matches the mesh (raycasts hit it), dirty-chunk rebuild timing shown i
 
 ## 6. Player, laser, lenses (M3)
 
-### 6.1 Gyro rig
-- Merge the two orbit scripts into `gyro_rig.gd`. Needs to reach the **poles** — replace clamped
+### 6.1 Gyro satellite rig
+- The gyro is **a big satellite**. The planet never moves; the satellite orbits it.
+- Merge the two orbit scripts into `gyro_rig.gd`. It must reach the **poles**, so replace clamped
   yaw/pitch with quaternion trackball accumulation (keep the inertia/gain feel from the current
-  script). Distance clamp scaled to planet radius.
+  script). The satellite sits at `orbit_radius` looking at the planet centre.
+- Scroll moves the **camera** relative to the satellite (third-person framing) only. The beam
+  always starts at the satellite, so zooming never changes reach.
+- **Orbit radius**: `orbit_radius = surface_radius × orbit_factor[collapses]`, with
+  `orbit_factor` decreasing per collapse (start e.g. 1.8, 1.65, 1.5, …). The planet's apparent
+  angular size is `asin(surface_radius / orbit_radius)`, so it **grows only if the ratio grows**.
+  Dropping the orbit by exactly the shell thickness would make the planet look *smaller*.
+- On collapse, animate the descent (a few seconds, ease in-out) while chunks rebuild.
 - The rig owns the emitters; laser fires along the camera's forward through the crosshair.
 - Placeholder for the designer's armature + targeting hologram.
 
 ### 6.2 Defs
 ```
 MaterialDef  : name, color, min_power, hardness, instant_threshold, particle_scene, ore_type (OreDef or null)
-LaserTypeDef : name, power_by_material: Dictionary[MaterialDef→float] (or per class), depth_reach, fuel_per_sec, beam_color
+LaserTypeDef : name, power_by_material: Dictionary[MaterialDef→float] (or per class), reach (units from satellite), fuel_per_sec, beam_color
 LensDef      : name, pattern (CIRCLE|LINE|RING|SCATTER), spread, focus, sample_points
 ```
 Upgrades multiply/add to these at runtime via `Meta` derived stats — **never mutate .tres at runtime**.
@@ -188,8 +200,8 @@ Upgrades multiply/add to these at runtime via `Meta` derived stats — **never m
 1. Raycast from emitter along aim (mask terrain|crawlers). Crawler hit → damage it, stop.
 2. Lens generates sample points on the tangent plane at the hit (pattern × spread), each with weight.
 3. For each sample: `points_in_sphere(sample, cell_radius)`. For each lattice point `idx` with `fill > 0`:
-   - skip if its shell is beyond **depth reach** (`shell < outermost_intact_shell − reach`)
-   - skip if its deposit is **locked** (scorch effect)
+   - skip if beyond **reach**: `|pos| < orbit_radius − reach` (scorch effect)
+   - skip if `corruption[idx] > 0` (scorch effect)
    - `p = laser_power(mat) · focus / area · weight · falloff(dist)`
    - if `p < mat.min_power` → scorch only
    - `rate = p / mat.hardness`; if `rate ≥ mat.instant_threshold` → `Δ = fill` else `Δ = min(fill, rate·dt)`
@@ -200,7 +212,8 @@ Upgrades multiply/add to these at runtime via `Meta` derived stats — **never m
 Beam visual: stretched cylinder/line, colour per laser type.
 
 **M3 acceptance:** you can aim anywhere incl. poles; sand cuts slowly with Thermal; rock is
-uncuttable until Plasma; lenses visibly change crater shape; depth reach blocks deeper shells.
+uncuttable until Plasma; lenses visibly change crater shape; reach stops cuts below
+`orbit_radius − reach`.
 
 ## 7. Ore chunks, tractor, collector, HUD (M4)
 
@@ -234,37 +247,51 @@ Fix `SurfaceNavigator` before relying on it:
 Crawler behaviour:
 - Spawner: points on the outer surface (raycast down from random directions), rate from round
   time/depth. Cap live crawlers (start 12).
-- Target: nearest exposed, unlocked deposit; goal = air-side position of one of its exposed cells.
-  Re-target if the deposit gets locked by another crawler or mined out.
-- Arrive → sit (squash tween ~2 s, interruptible by death) → `deposit.locked = true`,
-  `locked_by = self`, crawler stays parked.
-- HP; laser damage per second. Death of a seated crawler → lock persists unless the
-  `crawler_unseat` upgrade is owned.
-- Round end: despawn all, clear all locks.
+- Target: nearest exposed deposit that is not occupied and still has clean ore; goal = air-side
+  position of one of its exposed cells. Re-target if it becomes occupied or mined out.
+- Arrive → sit (squash tween ~2 s, interruptible by death) → `deposit.occupied_by = self`,
+  crawler stays parked and starts **corrupting**.
+
+Corruption (per-cell, `PlanetGrid.corruption`):
+- Every `spread_interval` (start 1.0 s) a seated crawler:
+  - raises every corrupted cell it owns by `growth_step`; at ≥ `root_threshold` the cell becomes
+    **255 = rooted** (permanent);
+  - corrupts the frontier: clean neighbouring cells with `fill > 0` that belong to **the same
+    deposit** (lateral + row ±1 adjacency). Spread starts at the cell under the crawler.
+- Corrupted cells can't be cut (§6.3) and are tinted on the mesh (mark chunks dirty, or push a
+  shader param, whichever is cheaper).
+- HP; laser damage per second. **On death: plasma burst** of radius `burst_radius` (upgrade track,
+  start small, about 1–2 cells) → every non-rooted corrupted cell inside → 0. Rooted cells stay.
+- Round end: despawn all crawlers, clear all **non-rooted** corruption (default; GDD §10 OPEN).
+  Rooted cells are saved with the planet.
 
 **M6 acceptance:** ≥8 crawlers path concurrently without frame drops >2 ms; they enter dug pits;
-they never path to unexposed deposits; locks block carving and show visually.
+they never path to unexposed deposits; corruption visibly spreads through the occupied deposit
+only; killing early saves most of it; a bigger burst upgrade frees more.
 
 ## 9. Round loop, upgrades, persistence (M5) and shell collapse (M7)
 
 ### Run state
 - `fuel` drains: `passive + laser_on·laser_type.fuel_per_sec + tractor_on·tractor_cost`.
 - `fuel ≤ 0` → round end: freeze input, tally collected ore → `Meta.bank`, despawn chunks
-  (lost) and crawlers, clear locks, save planet, show upgrade screen.
+  (lost) and crawlers, clear non-rooted corruption, save planet, show upgrade screen.
 - Upgrade screen: list of `UpgradeDef` (id, track, levels, cost per level by ore, effect key/value).
   Buttons: Buy, **Next round (same planet)**, **New planet**.
 
 ### Persistence
 - `user://meta.json` — ore bank, upgrade levels, current planet id.
 - `user://planets/<id>.planet` — header (version, seed, L, K, r_core, dr), `fill` buffer
-  (`FileAccess` + ZSTD compression), deposit runtime state that persists (mined amounts),
-  `outermost_intact_shell`, per-shell removed counters. Material/deposit layout regenerates from seed.
+  (`FileAccess` + ZSTD compression), `corruption` buffer (rooted cells only survive a save),
+  deposit runtime state that persists (mined amounts), `outermost_intact_shell` / collapse count,
+  per-shell removed counters. Material/deposit layout regenerates from seed.
 
 ### Shell collapse (M7)
 - Visible if upgrade owned and `cleared_fraction(outermost_intact_shell) ≥ threshold` (0.8 base).
-- On press: zero all fill in that shell (salvage % of remaining ore → bank, per upgrade stage),
-  play dissolve, mark all chunks dirty (rebuild spread over frames), `outermost_intact_shell −= 1`
-  (inward), save.
+- On press: zero all fill in that shell, play dissolve, mark all chunks dirty (rebuild spread over
+  frames), `outermost_intact_shell −= 1` (inward), **animate the satellite down to the new
+  `orbit_radius`** (§6.1), save.
+- Later upgrade stages (threshold, salvage, …) are **undecided until playtested**; keep the
+  threshold and any salvage % as plain tunables so they can become upgrades later.
 
 ## 10. Testing & tooling
 

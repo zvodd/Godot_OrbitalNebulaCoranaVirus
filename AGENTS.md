@@ -1,8 +1,9 @@
 # Nebula — agent handover
 
 Incremental planet-mining game in **Godot 4.7 / GDScript / GL Compatibility / Jolt**.
-A gyro over a small layered planet lasers out ore, a tractor beam extracts it, crawlers lock
-exposed deposits, fuel ends the round, ore buys upgrades.
+A gyro satellite orbiting a small layered planet lasers out ore, a tractor beam extracts it,
+crawlers corrupt exposed deposits, fuel ends the round, ore buys upgrades, and collapsing a
+cleared shell drops the satellite to a lower orbit.
 
 ## Read first
 1. [docs/GDD.md](docs/GDD.md) — what the game is, decisions log, open questions.

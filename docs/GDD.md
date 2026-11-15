@@ -6,11 +6,12 @@
 
 ## 1. Pitch
 
-An **incremental planet-mining game**. You control a two-axis gyroscopic armature hovering over a
-small planet. A laser in the armature slowly cuts into the planet's layered shells, ore drops
-loose, and a tractor beam hauls it up. Fuel runs out, the round ends, you spend ore on upgrades,
-and go again — on the same planet (whose damage persists) or a new one. Crawlers roam the surface
-and sit on exposed ore deposits, locking them for the round unless you shoot them first.
+An **incremental planet-mining game**. You control a big gyroscopic satellite orbiting a small
+planet. Its laser slowly cuts into the planet's layered shells, ore drops loose, and a tractor
+beam hauls it up. Fuel runs out, the round ends, you spend ore on upgrades, and go again — on the
+same planet (whose damage persists) or a new one. Crawlers roam the surface and sit on exposed ore
+deposits, corrupting the ore around them unless you shoot them first. Clear enough of a shell and
+it collapses: the satellite drops to a lower orbit and the planet looms larger.
 
 **The planet and ore system is the star of the show.** Everything else stays rudimentary
 (placeholder meshes, lines, plain UI) until the core feels good.
@@ -24,13 +25,16 @@ and sit on exposed ore deposits, locking them for the round unless you shoot the
  │   ore       → drops ORE CHUNKS        │
  │ tractor beam pulls chunks → collected │
  │ crawlers walk to exposed deposits,    │
- │   sit → deposit LOCKED for the round  │
- │ laser kills crawlers en route         │
+ │   sit → ore around them CORRUPTS      │
+ │ laser kills crawlers (plasma burst    │
+ │   cleanses non-rooted corruption)     │
+ │ shell ≥80% cleared → COLLAPSE button  │
+ │   → satellite drops to lower orbit    │
  │ fuel drains (use + slow passive)      │
  └──────────── fuel = 0 ─────────────────┘
                     │
         round ends: un-extracted chunks lost,
-        locks cleared, crawlers despawn
+        crawlers despawn, non-rooted corruption cleared
                     │
             UPGRADE SCREEN (spend ore)
                     │
@@ -77,49 +81,61 @@ MVP material set:
 ### 3.3 Ore deposits
 - Ore exists as **deposits**: connected blobs of ore cells generated per shell from the shell's
   ore table. A deposit has an id, ore type, its cells, and runtime state
-  (`exposed`, `locked`, `locked_by`).
+  (`exposed`, `occupied_by` crawler). Corruption is tracked **per cell**, not per deposit (see 5).
 - A deposit is **exposed** when any of its solid cells touches air (i.e. mining revealed it).
   Only exposed deposits are reachable by crawlers. **Exposing ore is both the reward and the
   risk** — this is the central tension.
 
-### 3.4 Depth limit
-- You cannot cut deeper than **N shells below the outermost intact shell** (MVP N = 3).
-  Raising the limit comes from an upgrade path **or** from switching to a laser type with more
-  depth reach.
-- **OPEN**: designer said "3 layers past the outermost shell". Interpretation (a) = 3 *shells*
-  (default, implemented), (b) = 3 *rows* below the outermost shell's floor. If (b) is chosen,
-  the limit must be measured from the bottom of the outermost shell, otherwise a thick shell
-  could never reach the 80% collapse threshold.
+### 3.4 Depth limit = laser focal reach (PROPOSED, confirm in playtest)
+- The beam can only focus so far from the satellite. Each laser type has a **reach** (distance);
+  cells closer to the core than `orbit_radius − reach` cannot be cut.
+- Reach grows with upgrades or by switching laser type. Shell collapse lowers the satellite's
+  orbit (3.5), which moves the whole reachable window deeper. This unifies "depth limit",
+  "laser type depth" and "collapse lets you go deeper" into one number.
+- Tune so that, at the start, reach covers roughly the outer shell plus a little of the next.
+  This replaces the earlier "3 layers past the outermost shell" rule (which was ambiguous between
+  shells and rows).
 
 ### 3.5 Shell collapse
 - Unlocked by an upgrade. Once the **outermost intact shell is ≥ 80% cleared** (by initial solid
   volume), a **Collapse** button appears. Pressing it disintegrates every remaining cell of that
-  shell (big dissolve effect); the next shell becomes the surface and the depth window moves in.
-- Further stages of the upgrade improve it. OPEN: lower threshold (80 → 60 → 40%) and/or salvage a
-  percentage of the ore in the collapsing shell. Default plan: both, as separate upgrade tracks.
+  shell (big dissolve effect) and **reveals the next shell as the new surface**.
+- **The satellite then descends to a lower orbit**, so the planet looks *bigger* on screen after
+  each collapse, and the laser's reach now extends deeper. In-fiction: "now we can get close
+  enough to focus nearer the core". (Note for tuning: the orbit must drop by more than the shell's
+  thickness, proportionally, or the planet would look *smaller*. See ROADMAP §6.1.)
+- **Needs playtesting.** Threshold starts at 80%. Later upgrade stages (lower threshold, ore
+  salvage from the collapsing shell, etc.) are deliberately undecided until it's playable.
 
 ### 3.6 Persistence
-- Planet damage persists across rounds. Deposit **locks reset** each round.
+- Planet damage persists across rounds, and so do **rooted** (permanent) corrupted cells.
+  Non-rooted corruption is cleared at round end (default; see 5).
 - Player can return to a planet or roll a new one (new seed). MVP: a "New planet" button on the
   upgrade screen; old planet save kept.
 
 ## 4. Player tools
 
-The player's gyro carries **emitters**. Emitters are generic components (origin + direction) so
-that later satellites/bots can carry the same tools.
+The player's gyro is **a big satellite** in orbit around the planet. It carries **emitters**.
+Emitters are generic components (origin + direction) so that later satellites/bots can carry the
+same tools; a "laser satellite" upgrade is literally another one of these.
 
 ### 4.1 Aiming
-The laser fires down the centre of the view (crosshair). You aim by rotating the gyro/camera
-(existing trackball-style orbit camera). The 3D gyro armature model and the targeting
-lens/hologram are the designer's own assets, coming later — placeholder until then.
+- The satellite **orbits freely over the whole sphere, poles included**; the planet stays still
+  (simplest for physics, chunks and crawlers).
+- The laser fires down the centre of the view (crosshair). You aim by moving the satellite around
+  its orbit (trackball-style controls with inertia, from the existing camera script). Scroll only
+  moves the camera relative to the satellite; it doesn't change the orbit or the beam's reach.
+- Orbit radius is set by the outermost intact shell (drops on collapse, 3.5).
+- The 3D gyro armature model and the targeting lens/hologram are the designer's own assets,
+  coming later; placeholder until then.
 
 ### 4.2 Laser = **Laser type** + **Lens** (two swappable slots)
 - **Laser type** — *what it can get through*. Defines base power per material (or per material
-  class), **depth reach** (shells below outermost), and fuel cost/second. Upgrades raise power.
-  MVP types (placeholder names):
-  - *Thermal* — cuts sand only, depth reach 1.
-  - *Plasma* — cuts rock and shallow ores, depth reach 2.
-  - *Ion* — cuts everything, depth reach 3, expensive fuel.
+  class), **reach** (focal distance from the satellite, see 3.4), and fuel cost/second.
+  Upgrades raise power and reach. MVP types (placeholder names), shortest to longest reach:
+  - *Thermal* — cuts sand only, short reach.
+  - *Plasma* — cuts rock and shallow ores, medium reach.
+  - *Ion* — cuts everything, long reach, expensive fuel.
 - **Lens** — *the pattern, spread and focus of the beam*.
   - pattern: circle, line, ring, scatter (set of sample points around the hit point)
   - spread: radius of the pattern
@@ -145,14 +161,22 @@ lens/hologram are the designer's own assets, coming later — placeholder until 
 ## 5. Crawlers (enemies)
 
 - Spawn on the planet surface over the round (rate rises with round time / depth).
-- Each picks the nearest **exposed, unlocked** deposit and walks there **over existing terrain**
+- Each picks the nearest **exposed, unoccupied** deposit and walks there **over existing terrain**
   (planet surface, walls and floors of pits you dug). They cannot burrow.
 - On arrival they play a **sit-down animation** (placeholder: squash tween + a couple of seconds)
-  and the deposit becomes **locked**: unminable for the rest of the round.
+  and start **corrupting** the deposit: tendrils of reinforcement spread outward through the ore
+  they landed on, making it **unminable**. The corrupted area grows slowly over time.
+  - Corruption spreads only through cells of **that deposit's ore**, starting at the crawler.
+  - PROPOSED mechanic: each corrupted cell's corruption keeps growing; once it passes a threshold
+    the cell is **rooted** (permanent). So older tendrils near the crawler root first.
 - The laser damages and kills crawlers (the beam also cuts terrain behind/under them).
-- Killing a crawler **that has already sat** does **not** unlock the deposit initially. An upgrade
-  path later allows it (stage 1: unlocks after a delay; stage 2: unlocks immediately — OPEN, tune).
-- Placeholder visuals: capsule/blob mesh.
+- **Killing a crawler releases a plasma burst** that cleanses corruption within a radius, but
+  **rooted cells stay corrupted** ("some of it is permanent"). Kill them early and you lose little.
+- **Upgrade path:** a bigger plasma burst radius, so more of the corrupted ore is freed.
+- OPEN: does "permanent" mean for the rest of the round or forever on this planet? Default:
+  rooted cells stay unminable **for good on this planet**; non-rooted tendrils left by crawlers
+  still alive at round end are cleared.
+- Placeholder visuals: capsule/blob mesh; corrupted cells tinted dark on the planet mesh.
 
 ## 6. Meta-progression
 
@@ -160,11 +184,11 @@ lens/hologram are the designer's own assets, coming later — placeholder until 
 - Upgrade tracks (MVP, all data-driven):
   - Laser types: unlock Plasma, Ion; power levels per type.
   - Lenses: unlock Pin, Wide.
-  - Depth reach (+1 shell per stage).
+  - Laser reach (focal distance).
   - Fuel: capacity, passive drain, tool efficiency.
   - Tractor: strength, range, cone.
-  - Shell collapse: unlock; threshold; salvage.
-  - Crawler control: unseat-on-kill.
+  - Shell collapse: unlock (further stages TBD after playtesting).
+  - Crawler control: plasma burst radius on kill.
 - Upgrade screen: plain list/grid of buttons with costs. Placeholder UI.
 
 ## 7. Presentation (MVP = placeholder)
@@ -192,18 +216,22 @@ lens/hologram are the designer's own assets, coming later — placeholder until 
 | 2026-11-15 | Data model = layered icosphere lattice; render via mesh extraction (marching tetrahedra), **not** shader raymarching (keeps physics collision, existing raycast navigator, chunk physics). |
 | 2026-11-15 | Materials are data only (no slumping/structural sim); difficulty comes from upgrades vs `min_power`/`hardness`; visuals via authored particles. |
 | 2026-11-15 | Fuel drains on tool use + slow passive drain. |
-| 2026-11-15 | Sitting crawler's lock survives its death until an upgrade allows unlocking. |
+| 2026-11-15 | ~~Sitting crawler's lock survives its death until an upgrade allows unlocking.~~ Superseded by the corruption model below. |
 | 2026-11-15 | Shell collapse: upgrade-unlocked, button appears at 80% cleared. |
-| 2026-11-15 | Laser split into Laser type (what it cuts, depth reach) and Lens (pattern/spread/focus). |
+| 2026-11-15 | Laser split into Laser type (what it cuts, reach) and Lens (pattern/spread/focus). |
 | 2026-11-15 | Only extracted (tractored) ore counts. |
 | 2026-11-15 | Tools are generic emitters; collection via a generic collector (future ships/bots/satellites). |
 | 2026-11-15 | GDScript only for MVP; small planet (radius ~32 units). |
+| 2026-11-15 | The gyro is a big satellite orbiting freely (poles included); the planet stays still. |
+| 2026-11-15 | Shell collapse reveals the next surface and lowers the satellite's orbit (planet looks bigger, beam reaches deeper). Stages after unlock: decide after playtesting. |
+| 2026-11-15 | Crawlers corrupt ore around them over time instead of locking a whole deposit; death releases a plasma burst that cleanses non-permanent corruption; upgrades enlarge the burst. |
 
 ## 10. Open questions
 
-1. Depth limit: 3 shells (default) vs 3 rows. See 3.4.
-2. Shell collapse later stages: threshold vs salvage (default: both tracks).
-3. What the core is.
-4. Ore names / setting.
-5. Crawler unseat upgrade stages.
-6. New-planet variety (MVP: same generator, new seed).
+1. Depth limit as laser focal reach from the satellite (proposed, 3.4); confirm once playable.
+2. Shell collapse stages after unlock; needs playtesting.
+3. Corruption permanence: rest of round vs forever on the planet (default: rooted = forever). See 5.
+4. Can the laser and tractor fire at the same time? Default: yes.
+5. What the core is.
+6. Ore names / setting.
+7. New-planet variety (MVP: same generator, new seed).
