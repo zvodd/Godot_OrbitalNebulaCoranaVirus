@@ -43,7 +43,8 @@ const EXPECTED_API := {
 	"PlanetCoreMaterial": ["cuttable", "is_ore", "get_color", "get_hardness", "get_chunk_volume"],
 	"PlanetCoreShell": ["get_rows", "get_base_material", "get_secondary_amount", "get_ores"],
 	"PlanetCoreOre": ["get_material", "get_count_min", "get_size_max"],
-	"PlanetCoreDeposit": ["get_cells", "get_cell_count", "get_exposed", "get_material_index"],
+	"PlanetCoreDeposit": ["get_cells", "get_cell_count", "get_exposed", "get_material_index",
+			"append_cell", "clear_cells"],
 	"PlanetCoreGenerator": ["generate"],
 }
 
@@ -103,6 +104,74 @@ func _init() -> void:
 	_check(grid.dirty_count() == 0, "clear_dirty empties the queue")
 	grid.carve_sphere(Vector3(0, 31, 0), 3.0)
 	_check(grid.dirty_count() > 0, "carving dirties patches (%d)" % grid.dirty_count())
+
+	# 6) Indexed accessors: they must agree with the whole-array getters, and reads/writes must
+	#    not copy. These are what keep the carve path linear.
+	var fill_all := grid.get_fill()
+	var material_all := grid.get_material()
+	var deposit_all := grid.get_deposit()
+	var corruption_all := grid.get_corruption()
+	var mismatched := 0
+	for i in [0, 1, 997, 10242, 133000, grid.get_point_count() - 1]:
+		if grid.fill_at(i) != fill_all[i] or grid.material_at(i) != material_all[i] \
+				or grid.deposit_at(i) != deposit_all[i] or grid.corruption_at(i) != corruption_all[i]:
+			mismatched += 1
+		if grid.is_solid_at(i) != (fill_all[i] >= 0.5):
+			mismatched += 1
+	_check(mismatched == 0, "indexed accessors agree with the array getters (%d mismatches)" % mismatched)
+
+	var probe := grid.world_to_lattice(Vector3(0, 0, 31))
+	var fill_before := grid.fill_at(probe)
+	grid.set_fill_at(probe, 0.25)
+	_check(absf(grid.fill_at(probe) - 0.25) < 1e-6, "set_fill_at writes one cell (%.2f)" % grid.fill_at(probe))
+	grid.set_fill_at(probe, fill_before)
+	var mi_probe := grid.material_at(probe)
+	grid.set_material_at(probe, 1)
+	_check(grid.material_at(probe) == 1, "set_material_at writes one cell")
+	grid.set_material_at(probe, mi_probe)
+	grid.set_corruption_at(probe, 7)
+	_check(grid.corruption_at(probe) == 7, "set_corruption_at writes one cell")
+	grid.set_corruption_at(probe, 0)
+	_check(grid.fill_at(-1) == 0.0 and grid.material_at(-1) == 0 and grid.deposit_at(-1) == -1,
+			"out-of-range reads are safe")
+
+	# Out-of-range writes must not corrupt the lattice.
+	grid.set_fill_at(-5, 1.0)
+	grid.set_fill_at(grid.get_point_count() + 5, 1.0)
+	_check(grid.get_fill().size() == grid.get_point_count(), "out-of-range writes are ignored")
+
+	var shells := grid.shell_count()
+	_check(shells == 8, "shell_count = %d" % shells)
+	_check(grid.shell_name(0) != "", "shell_name(0) = '%s'" % grid.shell_name(0))
+	_check(is_equal_approx(grid.shell_initial_solid_at(0), grid.shell_initial_solid_at(0)),
+			"shell_initial_solid_at readable")
+	_check(grid.material_count() == grid.get_materials().size(), "material_count matches get_materials()")
+	_check(grid.material_at_index(0) != null and grid.material_at_index(-1) == null,
+			"material_at_index bounds-checked")
+	_check(grid.mat_color_at(0) == grid.get_mat_colors()[0], "mat_color_at matches get_mat_colors()")
+
+	# 7) Dirty queue without allocating arrays.
+	var dirty_before := grid.dirty_count()
+	var walked := 0
+	for i in range(dirty_before - 1, -1, -1):
+		var p := grid.dirty_patch_at(i)
+		if p >= 0 and p < ico.get_patch_count():
+			walked += 1
+	_check(walked == dirty_before, "dirty_patch_at walks the queue (%d)" % walked)
+	_check(grid.clear_dirty_patch(grid.dirty_patch_at(0)), "clear_dirty_patch removes one patch")
+	_check(grid.dirty_count() == dirty_before - 1, "clear_dirty_patch shrinks the queue")
+
+	# 8) Pending ore / exposure accessors used by the Planet node each frame.
+	grid.clear_pending_ore()
+	grid.clear_newly_exposed()
+	_check(grid.pending_ore_count() == 0 and grid.newly_exposed_count() == 0, "event queues clear")
+
+	# 9) first_open_neighbour: the ore spawn helper (row above first, then lateral).
+	var air_cell := grid.world_to_lattice(Vector3(0, 0, 31.5))
+	var nb := grid.first_open_neighbour(air_cell)
+	_check(nb == -1 or (nb >= 0 and nb < grid.get_point_count()),
+			"first_open_neighbour returns a valid index or -1 (%d)" % nb)
+	_check(grid.first_open_neighbour(-1) == -1, "first_open_neighbour bounds-checked")
 
 	print("\n%d checks, %d failed, %d ms" % [_checks, _fails, Time.get_ticks_msec() - t0])
 	quit(1 if _fails > 0 else 0)

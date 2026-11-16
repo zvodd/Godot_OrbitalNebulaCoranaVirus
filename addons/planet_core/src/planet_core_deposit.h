@@ -37,6 +37,10 @@ public:
 	void set_shell(int32_t p_shell) { shell = p_shell; }
 	int32_t get_shell() const { return shell; }
 	void set_cells(const PackedInt32Array &p_cells);
+	/** Append one lattice index without copying the whole cell list (get_cells() copies). */
+	void append_cell(int32_t idx);
+	/** Remove every cell, keeping the deposit object and its id. */
+	void clear_cells();
 	PackedInt32Array get_cells() const;
 	int32_t get_cell_count() const { return (int32_t)cells.size(); }
 	void set_exposed(bool p_exposed) { exposed = p_exposed; }

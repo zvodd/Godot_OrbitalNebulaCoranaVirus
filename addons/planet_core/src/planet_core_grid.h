@@ -141,6 +141,56 @@ public:
 	int32_t get_outermost_intact_shell() const { return outermost_intact_shell; }
 	void set_outermost_intact_shell(int32_t p_shell) { outermost_intact_shell = p_shell; }
 
+	// --- indexed cell accessors --------------------------------------------
+	//
+	// The `get_*()` array getters above copy the whole lattice (~1 MB at L=5). Anything that
+	// touches cells inside a loop must use these instead, or every access becomes O(V*rows).
+	// Each one is a single bounds-checked load/store.
+
+	double fill_at(int32_t idx) const;
+	void set_fill_at(int32_t idx, double value);
+	/** fill_at(idx) >= ISO, so callers do not re-implement the threshold. */
+	bool is_solid_at(int32_t idx) const;
+	int32_t material_at(int32_t idx) const;
+	void set_material_at(int32_t idx, int32_t value);
+	int32_t deposit_at(int32_t idx) const;
+	void set_deposit_at(int32_t idx, int32_t value);
+	int32_t corruption_at(int32_t idx) const;
+	void set_corruption_at(int32_t idx, int32_t value);
+
+	// Scalar/row-table accessors: same reasoning, these must not copy the whole table either.
+	double shell_removed_at(int32_t shell) const;
+	double shell_initial_solid_at(int32_t shell) const;
+	int32_t shell_count() const { return (int32_t)shell_top_row.size(); }
+	String shell_name(int32_t shell) const;
+	Color mat_color_at(int32_t material) const;
+	int32_t material_count() const { return (int32_t)materials.size(); }
+	Ref<PlanetCoreMaterial> material_at_index(int32_t index) const;
+
+	int32_t deposit_count() const { return (int32_t)deposits.size(); }
+	Ref<PlanetCoreDeposit> deposit_at_index(int32_t index) const;
+	/** Append an empty deposit (used when a script paints ore into the lattice). */
+	int32_t add_deposit(int32_t material_index, int32_t shell);
+
+	// Dirty queue without allocating an Array/Dictionary per call.
+	int32_t dirty_patch_at(int32_t i) const;
+	bool clear_dirty_patch(int32_t patch);
+
+	// Deferred ore drops / exposure notifications, read by the Planet node each frame.
+	int32_t pending_ore_count() const { return (int32_t)pending_ore.size(); }
+	int32_t pending_ore_material(int32_t i) const;
+	int32_t pending_ore_index(int32_t i) const;
+	void clear_pending_ore() { pending_ore.clear(); }
+	int32_t newly_exposed_count() const { return (int32_t)newly_exposed.size(); }
+	int32_t newly_exposed_at(int32_t i) const;
+	void clear_newly_exposed() { newly_exposed.clear(); }
+
+	/**
+	 * Index of an air neighbour of `idx` (row above first, then lateral), or -1.
+	 * Port of `Planet._ore_spawn_pos`'s neighbour search, so callers need no adjacency arrays.
+	 */
+	int32_t first_open_neighbour(int32_t idx) const;
+
 	// --- C++-side views for the hot loops ---
 	const std::vector<float> &fill_ref() const { return fill; }
 	std::vector<float> &fill_ref() { return fill; }

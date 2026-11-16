@@ -46,24 +46,110 @@ static func min_cut_radius(laser: LaserTypeDef, orbit_radius: float, reach_bonus
 
 ## Apply one tick of beam. `hit` is the surface hit point, `beam_dir` the beam's travel
 ## direction (unit). `power_mult` / `reach_bonus` are where upgrades plug in later.
-static func apply(grid: PlanetGrid, hit: Vector3, beam_dir: Vector3, laser: LaserTypeDef,
+##
+## `grid` is either the C++ `PlanetCoreGridData` (the shipped path) or the GDScript
+## `PlanetGrid` reference. The C++ branch deliberately uses the indexed accessors
+## (`fill_at` / `material_at` / `corruption_at` / `erode`): `grid.fill[idx]` on the extension
+## copies the whole 1 MB lattice per access, which would turn this loop quadratic.
+static func apply(grid: RefCounted, hit: Vector3, beam_dir: Vector3, laser: LaserTypeDef,
 		lens: LensDef, orbit_radius: float, dt: float,
 		power_mult: float = 1.0, reach_bonus: float = 0.0) -> Result:
+	var core := grid as PlanetCoreGridData
+	return _apply_core(core, hit, beam_dir, laser, lens, orbit_radius, dt, power_mult, reach_bonus) \
+			if core != null else _apply_gdscript(grid as PlanetGrid, hit, beam_dir, laser, lens, \
+					orbit_radius, dt, power_mult, reach_bonus)
+
+
+## C++ path. Every lattice access is a single indexed call; nothing copies the arrays.
+static func _apply_core(grid: PlanetCoreGridData, hit: Vector3, beam_dir: Vector3,
+		laser: LaserTypeDef, lens: LensDef, orbit_radius: float, dt: float,
+		power_mult: float, reach_bonus: float) -> Result:
 	var res := Result.new()
 	var p_cell := cell_power(laser, lens, power_mult)
 	res.cell_power = p_cell
 	var min_r := min_cut_radius(laser, orbit_radius, reach_bonus)
 	var min_r2 := min_r * min_r
 
-	# Tangent frame for the lens pattern.
 	var up := Vector3.UP if absf(beam_dir.y) < 0.95 else Vector3.RIGHT
 	var tx := beam_dir.cross(up).normalized()
 	var ty := tx.cross(beam_dir)
 
-	# idx → strongest falloff over all samples that touch it.
+	# idx -> strongest falloff over all samples that touch it.
 	# Each sample is a short capsule along the beam (a few spheres stacked back toward the
 	# emitter), so the pit keeps the beam's full width as its floor sinks instead of
 	# narrowing into a pinhole under the hit point.
+	# fill_at() is a single indexed read: `grid.fill[idx]` here would copy the whole lattice.
+	var cells := {}
+	for s in lens.samples():
+		var radius := maxf(s.z, MIN_BRUSH)
+		var axis := hit + tx * s.x + ty * s.y
+		var r2 := radius * radius
+		for step in CAPSULE_STEPS:
+			var centre := axis + beam_dir * (minf(BITE, radius) - step * radius)
+			for idx in grid.points_in_sphere(centre, radius):
+				if grid.fill_at(idx) <= 0.0:
+					continue
+				var rel := grid.lattice_pos(idx) - axis
+				var along := rel.dot(beam_dir)
+				var lateral2 := rel.length_squared() - along * along
+				if lateral2 > r2:
+					continue
+				var falloff := 1.0 - EDGE_FALLOFF * lateral2 / r2
+				if falloff > cells.get(idx, 0.0):
+					cells[idx] = falloff
+
+	var per_material := {}
+	var V := grid.get_V()
+	var last_row := grid.get_rows() - 1
+	var materials := grid.materials
+	for idx: int in cells:
+		var mi := grid.material_at(idx)
+		var m: PlanetCoreMaterial = materials[mi]
+		@warning_ignore("integer_division")
+		var k := idx / V
+		var solid := grid.is_solid_at(idx)
+		# Buried cells wait until the layer above them is gone.
+		if solid and not grid.is_exposed(idx):
+			continue
+		var block := Block.NONE
+		if k <= 0 or k >= last_row or not m.cuttable():
+			block = Block.CORE
+		elif grid.lattice_pos(idx).length_squared() < min_r2:
+			block = Block.OUT_OF_REACH
+		elif grid.corruption_at(idx) > 0:
+			block = Block.CORRUPTED
+		elif p_cell < m.get_min_power():
+			block = Block.TOO_HARD
+		if block != Block.NONE:
+			if solid and (res.blocked == Block.NONE or block == Block.TOO_HARD):
+				res.blocked = block
+				res.blocked_material = mi
+			continue
+		var rate := p_cell / m.get_hardness()
+		var amount := 1.0 if rate >= m.get_instant_threshold() else rate * float(cells[idx]) * dt
+		var d := grid.erode(idx, amount)
+		if d > 0.0:
+			res.removed += d
+			per_material[mi] = per_material.get(mi, 0.0) + d
+
+	_finish(res, per_material)
+	return res
+
+
+## GDScript reference path (kept so the fallback and the tests still exercise it).
+static func _apply_gdscript(grid: PlanetGrid, hit: Vector3, beam_dir: Vector3,
+		laser: LaserTypeDef, lens: LensDef, orbit_radius: float, dt: float,
+		power_mult: float, reach_bonus: float) -> Result:
+	var res := Result.new()
+	var p_cell := cell_power(laser, lens, power_mult)
+	res.cell_power = p_cell
+	var min_r := min_cut_radius(laser, orbit_radius, reach_bonus)
+	var min_r2 := min_r * min_r
+
+	var up := Vector3.UP if absf(beam_dir.y) < 0.95 else Vector3.RIGHT
+	var tx := beam_dir.cross(up).normalized()
+	var ty := tx.cross(beam_dir)
+
 	var cells := {}
 	for s in lens.samples():
 		var radius := maxf(s.z, MIN_BRUSH)
@@ -117,6 +203,11 @@ static func apply(grid: PlanetGrid, hit: Vector3, beam_dir: Vector3, laser: Lase
 			res.removed += d
 			per_material[mi] = per_material.get(mi, 0.0) + d
 
+	_finish(res, per_material)
+	return res
+
+
+static func _finish(res: Result, per_material: Dictionary) -> void:
 	var best := 0.0
 	for mi: int in per_material:
 		if per_material[mi] > best:
@@ -125,4 +216,3 @@ static func apply(grid: PlanetGrid, hit: Vector3, beam_dir: Vector3, laser: Lase
 	if res.removed > 0.0:
 		res.blocked = Block.NONE
 		res.blocked_material = -1
-	return res

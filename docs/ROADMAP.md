@@ -12,12 +12,49 @@
 | M1 Icosphere lattice & planet data | ✅ done | `game/planet/` icosphere, grid, generator; `tests/test_planet_core.gd`. Debug lattice-point cutaway scene skipped. |
 | M2 Mesh extraction, chunks, collision | ✅ done | Marching tets, 320 chunks, trimesh collision, 4 ms dirty budget. ~1.6 ms avg / ~7 ms worst chunk. Normals are gradient-based (seamless across chunks), mesh is non-indexed. |
 | M2b Planet core in C++ (GDExtension) | ✅ done | `addons/planet_core/` ports Icosphere + PlanetGrid + PlanetMesher + generator behind the same pure-data contract. Output is **bit-identical** to the GDScript reference (equivalence gate: max delta 0.0) and ~31x faster (820 ms → 27 ms for the whole planet). GDScript originals stay in place as the reference. |
+| M2c Game runs on the C++ core | ✅ done | `Planet` owns a `PlanetCoreGridData` + `PlanetCoreMesher`; every chunk rebuild goes through C++. Indexed accessors (`fill_at`/`material_at`/`erode`/`dirty_patch_at`…) keep the carve path linear (1422x cheaper than `get_fill()[idx]`). Measured: initial build **1964 → 231 ms** (8.5x), per-chunk rebuild **2.68 → 0.40 ms** median (6.7x). GDScript fallback still selectable via `Planet.use_gdscript_core`. |
 | M3 Gyro aim + laser (types, lenses, materials) | 🟡 playable | Trackball rig, 3 laser types, 3 lenses, reach limit. All types/lenses unlocked (no upgrades yet). Needs feel/tuning pass by the designer. |
 | M4 Ore chunks, tractor beam, collector, HUD | 🟡 playable | Chunks, radial gravity, tractor cone with line of sight, collector, placeholder HUD + F3 overlay. No fuel bar (M5). |
 | M5 Round loop: fuel, end screen, upgrades, persistence | ⏳ next | |
 | M6 Crawlers | ⬜ | |
 | M7 Shell collapse + depth limit polish | ⬜ | |
 | M8 Balance & feel pass | ⬜ | |
+
+**As built (2026-11-16), the game on the C++ core (M2c):**
+- `Planet` owns a `PlanetCoreGridData` (a `PlanetCoreGrid` subclass adding the array-shaped
+  properties GDScript code expects) and a `PlanetCoreMesher`. `Planet.grid` stays public but is
+  now typed `RefCounted`, so code that touches cells must pick a branch or use the shared surface.
+- **Indexed accessors are mandatory on the hot path.** `get_fill()` copies the whole lattice
+  (~1 MB, 344 us/call at L=5), so `get_fill()[idx]` in a carve loop is O(n^2). The extension now
+  exposes `fill_at` / `set_fill_at` / `is_solid_at` / `material_at` / `deposit_at` /
+  `corruption_at` / `shell_removed_at` / `dirty_patch_at` / `clear_dirty_patch` /
+  `pending_ore_*` / `first_open_neighbour`, and `LaserCarve`, `Laser`, `Hud` and `Planet` use them.
+  Measured 0.24 us vs 342 us per access — **1422x**; a whole carve tick is 0.23 ms.
+- `PlanetCoreGridData.fill` &c. are **read-only snapshots** for scattered reads and tests, not
+  loops. Writes go through the indexed setters plus `touch_cell(idx)` (named that way because
+  `touch()` is a native `PlanetCoreGrid` method and GDScript cannot override it).
+- `Planet.dirty_count()` / `carve_sphere()` / `triangle_count()` / the four signals keep their
+  shape. `carve_sphere` invalidates the snapshot cache; `_process` drains pending ore and exposure
+  events through the indexed accessors instead of building arrays.
+- **`PlanetChunk.apply()` keeps one `ConcavePolygonShape3D` and mutates it in place, and never
+  re-assigns it to the `CollisionShape3D`.** Re-assigning or swapping the shape costs 0.42-0.66
+  ms/chunk (physics rebuilds the shape's BVH and broadphase entry); in-place `set_faces()` on the
+  already-attached shape costs 0.012 ms. Before that fix, collision churn was ~150 ms of a 170 ms
+  full-planet rebuild. There is no way to skip this work entirely: an enabled trimesh shape costs
+  ~0.3 ms to update versus ~0.02 ms while disabled, and batching the enable just moves the cost.
+- Measured on this machine, same `Planet` node, both paths:
+
+  | | GDScript | C++ |
+  |---|---|---|
+  | initial build (320 chunks) | 1964 ms | **231 ms** (8.5x) |
+  | per-chunk rebuild, median | 2.68 ms | **0.40 ms** (6.7x) |
+  | per-chunk rebuild, p90 | 2.90 ms | **0.44 ms** |
+  | one `LaserCarve.apply` tick | — | 0.23 ms |
+
+  Whole-planet meshing alone is 14.5 ms of that build; generation is ~70 ms and the rest is
+  ArrayMesh upload + unavoidable trimesh collision.
+- `Planet.use_gdscript_core = true` runs the old path (still exercised by `test_gameplay`'s
+  `_paint` and by the equivalence gate, which builds both cores directly).
 
 **As built (2026-11-16), the C++ planet core:**
 - `addons/planet_core/` is a GDExtension built with `scons` against `godot-cpp` (Godot 4.7 API).
@@ -362,6 +399,13 @@ only; killing early saves most of it; a bigger burst upgrade frees more.
     public method is registered, and one chunk meshes headlessly (prints the triangle count).
   - `godot --headless -s tests/test_planet_core_equivalence_levels.gd` — the same equivalence at
     L=3/C=1 and L=4/C=2, so the port is not tuned to the shipping lattice.
+  - `godot --headless --fixed-fps 60 -s tests/test_planet_core_boot.gd` — boots the real entry
+    scene `game/main.tscn` on the C++ path and prints `PlanetCore.available`, proof the C++ mesher
+    built the chunks (`using_core_mesher`, `core_chunk_builds`), triangle count,
+    `initial_build_ms`, `worst_chunk_ms` and the per-chunk median/p90.
+  - `godot --headless -s tests/test_planet_core_perf.gd` — guards the O(n²) trap: asserts the
+    indexed accessors stay orders of magnitude cheaper than `get_fill()[idx]` and that one
+    `LaserCarve.apply()` tick stays well under a frame.
 - Building the extension: `cd addons/planet_core && scons platform=linux target=template_debug -j4`.
   Run `godot --headless --import` once afterwards so the editor picks up the new `.so`.
 - `debug_overlay.gd`: FPS, chunk rebuild ms, dirty queue length, live chunks/crawlers, nav

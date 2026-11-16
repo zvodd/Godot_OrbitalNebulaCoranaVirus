@@ -118,7 +118,10 @@ func _select(p_laser: int, p_lens: int) -> void:
 
 func _target_orbit_radius() -> float:
 	var grid := planet.grid
-	var collapses := clampi(grid.outermost_intact_shell, 0, orbit_factors.size() - 1)
+	# `outermost_intact_shell` is a property on the GDScript grid and a getter on the C++ one.
+	var outermost: int = grid.get_outermost_intact_shell() if grid is PlanetCoreGrid \
+			else grid.outermost_intact_shell
+	var collapses := clampi(outermost, 0, orbit_factors.size() - 1)
 	return grid.surface_radius() * orbit_factors[collapses]
 
 
@@ -170,7 +173,7 @@ func _process(delta: float) -> void:
 	_apply_transform()
 
 	# Keep the camera looking at where the beam lands so the pit stays centred.
-	var want := orbit_radius - planet.grid.surface_radius()
+	var want: float = orbit_radius - planet.grid.surface_radius()
 	if laser.has_hit:
 		want = laser.hit_point.distance_to(global_position)
 	_aim_dist = lerpf(_aim_dist, want, 1.0 - exp(-delta * 4.0))

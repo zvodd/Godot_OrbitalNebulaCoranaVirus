@@ -51,6 +51,37 @@ void PlanetCoreGrid::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_newly_exposed"), &PlanetCoreGrid::get_newly_exposed);
 	ClassDB::bind_method(D_METHOD("get_outermost_intact_shell"), &PlanetCoreGrid::get_outermost_intact_shell);
 	ClassDB::bind_method(D_METHOD("set_outermost_intact_shell", "shell"), &PlanetCoreGrid::set_outermost_intact_shell);
+
+	// Indexed accessors: single-cell reads/writes, no whole-array copy.
+	ClassDB::bind_method(D_METHOD("fill_at", "idx"), &PlanetCoreGrid::fill_at);
+	ClassDB::bind_method(D_METHOD("set_fill_at", "idx", "value"), &PlanetCoreGrid::set_fill_at);
+	ClassDB::bind_method(D_METHOD("is_solid_at", "idx"), &PlanetCoreGrid::is_solid_at);
+	ClassDB::bind_method(D_METHOD("material_at", "idx"), &PlanetCoreGrid::material_at);
+	ClassDB::bind_method(D_METHOD("set_material_at", "idx", "value"), &PlanetCoreGrid::set_material_at);
+	ClassDB::bind_method(D_METHOD("deposit_at", "idx"), &PlanetCoreGrid::deposit_at);
+	ClassDB::bind_method(D_METHOD("set_deposit_at", "idx", "value"), &PlanetCoreGrid::set_deposit_at);
+	ClassDB::bind_method(D_METHOD("corruption_at", "idx"), &PlanetCoreGrid::corruption_at);
+	ClassDB::bind_method(D_METHOD("set_corruption_at", "idx", "value"), &PlanetCoreGrid::set_corruption_at);
+	ClassDB::bind_method(D_METHOD("shell_removed_at", "shell"), &PlanetCoreGrid::shell_removed_at);
+	ClassDB::bind_method(D_METHOD("shell_initial_solid_at", "shell"), &PlanetCoreGrid::shell_initial_solid_at);
+	ClassDB::bind_method(D_METHOD("shell_count"), &PlanetCoreGrid::shell_count);
+	ClassDB::bind_method(D_METHOD("shell_name", "shell"), &PlanetCoreGrid::shell_name);
+	ClassDB::bind_method(D_METHOD("mat_color_at", "material"), &PlanetCoreGrid::mat_color_at);
+	ClassDB::bind_method(D_METHOD("material_count"), &PlanetCoreGrid::material_count);
+	ClassDB::bind_method(D_METHOD("material_at_index", "index"), &PlanetCoreGrid::material_at_index);
+	ClassDB::bind_method(D_METHOD("deposit_count"), &PlanetCoreGrid::deposit_count);
+	ClassDB::bind_method(D_METHOD("deposit_at_index", "index"), &PlanetCoreGrid::deposit_at_index);
+	ClassDB::bind_method(D_METHOD("add_deposit", "material_index", "shell"), &PlanetCoreGrid::add_deposit);
+	ClassDB::bind_method(D_METHOD("dirty_patch_at", "i"), &PlanetCoreGrid::dirty_patch_at);
+	ClassDB::bind_method(D_METHOD("clear_dirty_patch", "patch"), &PlanetCoreGrid::clear_dirty_patch);
+	ClassDB::bind_method(D_METHOD("pending_ore_count"), &PlanetCoreGrid::pending_ore_count);
+	ClassDB::bind_method(D_METHOD("pending_ore_material", "i"), &PlanetCoreGrid::pending_ore_material);
+	ClassDB::bind_method(D_METHOD("pending_ore_index", "i"), &PlanetCoreGrid::pending_ore_index);
+	ClassDB::bind_method(D_METHOD("clear_pending_ore"), &PlanetCoreGrid::clear_pending_ore);
+	ClassDB::bind_method(D_METHOD("newly_exposed_count"), &PlanetCoreGrid::newly_exposed_count);
+	ClassDB::bind_method(D_METHOD("newly_exposed_at", "i"), &PlanetCoreGrid::newly_exposed_at);
+	ClassDB::bind_method(D_METHOD("clear_newly_exposed"), &PlanetCoreGrid::clear_newly_exposed);
+	ClassDB::bind_method(D_METHOD("first_open_neighbour", "idx"), &PlanetCoreGrid::first_open_neighbour);
 	ClassDB::bind_method(D_METHOD("row_radius", "k"), &PlanetCoreGrid::row_radius);
 	ClassDB::bind_method(D_METHOD("lattice_pos", "idx"), &PlanetCoreGrid::lattice_pos);
 	ClassDB::bind_method(D_METHOD("world_to_lattice", "p"), &PlanetCoreGrid::world_to_lattice);
@@ -465,6 +496,193 @@ void PlanetCoreGrid::_expose(int32_t idx) {
 			newly_exposed.push_back(dep);
 		}
 	}
+}
+
+// --- indexed cell accessors -------------------------------------------------
+//
+// These exist because `get_fill()[idx]` copies ~1 MB per call: the carve path touches a cell
+// several times per tick inside loops, so the copy made it O(n^2) and ate the whole speed-up.
+// Each accessor is one array load plus a bounds check.
+
+double PlanetCoreGrid::fill_at(int32_t idx) const {
+	if (idx < 0 || idx >= point_count) {
+		return 0.0;
+	}
+	return (double)fill[(size_t)idx];
+}
+
+void PlanetCoreGrid::set_fill_at(int32_t idx, double value) {
+	if (idx < 0 || idx >= point_count) {
+		return;
+	}
+	// Narrowed to float32 like every other write into the packed fill array.
+	fill[(size_t)idx] = (float)value;
+}
+
+bool PlanetCoreGrid::is_solid_at(int32_t idx) const {
+	if (idx < 0 || idx >= point_count) {
+		return false;
+	}
+	return fill[(size_t)idx] >= (float)ISO;
+}
+
+int32_t PlanetCoreGrid::material_at(int32_t idx) const {
+	if (idx < 0 || idx >= point_count) {
+		return 0;
+	}
+	return (int32_t)material[(size_t)idx];
+}
+
+void PlanetCoreGrid::set_material_at(int32_t idx, int32_t value) {
+	if (idx < 0 || idx >= point_count) {
+		return;
+	}
+	material[(size_t)idx] = (uint8_t)(value & 0xFF);
+}
+
+int32_t PlanetCoreGrid::deposit_at(int32_t idx) const {
+	if (idx < 0 || idx >= point_count) {
+		return -1;
+	}
+	return deposit[(size_t)idx];
+}
+
+void PlanetCoreGrid::set_deposit_at(int32_t idx, int32_t value) {
+	if (idx < 0 || idx >= point_count) {
+		return;
+	}
+	deposit[(size_t)idx] = value;
+}
+
+int32_t PlanetCoreGrid::corruption_at(int32_t idx) const {
+	if (idx < 0 || idx >= point_count) {
+		return 0;
+	}
+	return (int32_t)corruption[(size_t)idx];
+}
+
+void PlanetCoreGrid::set_corruption_at(int32_t idx, int32_t value) {
+	if (idx < 0 || idx >= point_count) {
+		return;
+	}
+	corruption[(size_t)idx] = (uint8_t)(value & 0xFF);
+}
+
+double PlanetCoreGrid::shell_removed_at(int32_t shell) const {
+	if (shell < 0 || shell >= (int32_t)shell_removed.size()) {
+		return 0.0;
+	}
+	return shell_removed[(size_t)shell];
+}
+
+double PlanetCoreGrid::shell_initial_solid_at(int32_t shell) const {
+	if (shell < 0 || shell >= (int32_t)shell_initial_solid.size()) {
+		return 0.0;
+	}
+	return shell_initial_solid[(size_t)shell];
+}
+
+String PlanetCoreGrid::shell_name(int32_t shell) const {
+	if (config.is_null() || shell < 0 || shell >= config->get_shells().size()) {
+		return String();
+	}
+	Ref<PlanetCoreShell> s = config->get_shells()[shell];
+	return s.is_valid() ? s->get_name() : String();
+}
+
+Color PlanetCoreGrid::mat_color_at(int32_t material_idx) const {
+	if (material_idx < 0 || material_idx >= (int32_t)mat_colors.size()) {
+		return Color(1, 1, 1);
+	}
+	return mat_colors[(size_t)material_idx];
+}
+
+Ref<PlanetCoreMaterial> PlanetCoreGrid::material_at_index(int32_t index) const {
+	if (index < 0 || index >= (int32_t)materials.size()) {
+		return Ref<PlanetCoreMaterial>();
+	}
+	return materials[(size_t)index];
+}
+
+Ref<PlanetCoreDeposit> PlanetCoreGrid::deposit_at_index(int32_t index) const {
+	if (index < 0 || index >= (int32_t)deposits.size()) {
+		return Ref<PlanetCoreDeposit>();
+	}
+	return deposits[(size_t)index];
+}
+
+int32_t PlanetCoreGrid::add_deposit(int32_t material_index, int32_t shell) {
+	Ref<PlanetCoreDeposit> d;
+	d.instantiate();
+	d->set_id((int32_t)deposits.size());
+	d->set_material_index(material_index);
+	d->set_shell(shell);
+	deposits.push_back(d);
+	return d->get_id();
+}
+
+int32_t PlanetCoreGrid::dirty_patch_at(int32_t i) const {
+	if (i < 0 || i >= (int32_t)dirty_order.size()) {
+		return -1;
+	}
+	return dirty_order[(size_t)i];
+}
+
+bool PlanetCoreGrid::clear_dirty_patch(int32_t patch) {
+	if (patch < 0 || patch >= (int32_t)dirty_flag.size() || dirty_flag[(size_t)patch] == 0) {
+		return false;
+	}
+	dirty_flag[(size_t)patch] = 0;
+	for (size_t i = 0; i < dirty_order.size(); i++) {
+		if (dirty_order[i] == patch) {
+			// Order-preserving removal: the Planet node walks this list while dropping entries.
+			dirty_order.erase(dirty_order.begin() + (ptrdiff_t)i);
+			break;
+		}
+	}
+	return true;
+}
+
+int32_t PlanetCoreGrid::pending_ore_material(int32_t i) const {
+	if (i < 0 || i >= (int32_t)pending_ore.size()) {
+		return -1;
+	}
+	return pending_ore[(size_t)i].x;
+}
+
+int32_t PlanetCoreGrid::pending_ore_index(int32_t i) const {
+	if (i < 0 || i >= (int32_t)pending_ore.size()) {
+		return -1;
+	}
+	return pending_ore[(size_t)i].y;
+}
+
+int32_t PlanetCoreGrid::newly_exposed_at(int32_t i) const {
+	if (i < 0 || i >= (int32_t)newly_exposed.size()) {
+		return -1;
+	}
+	return newly_exposed[(size_t)i];
+}
+
+int32_t PlanetCoreGrid::first_open_neighbour(int32_t idx) const {
+	if (idx < 0 || idx >= point_count) {
+		return -1;
+	}
+	const int32_t k = idx / V;
+	if (k < rows - 1 && idx + V < point_count && fill[(size_t)(idx + V)] < (float)ISO) {
+		return idx + V;
+	}
+	const int32_t v = idx - k * V;
+	const int32_t base = k * V;
+	const std::vector<int32_t> &offs = ico->adj_offsets_ref();
+	const std::vector<int32_t> &adj = ico->adj_ref();
+	for (int32_t j = offs[(size_t)v]; j < offs[(size_t)v + 1]; j++) {
+		const int32_t nb = base + adj[(size_t)j];
+		if (fill[(size_t)nb] < (float)ISO) {
+			return nb;
+		}
+	}
+	return -1;
 }
 
 // --- packed accessors -------------------------------------------------------

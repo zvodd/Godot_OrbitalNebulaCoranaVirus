@@ -71,6 +71,18 @@ return copies, so the extension owns its buffers.
 `is_exposed(idx)`, `is_cuttable(idx)`, `gradient(idx)`, `erode(idx, amount)`, `touch(idx)`,
 `carve_sphere(p, radius)`, `refresh_exposure()`.
 
+**Indexed accessors (use these in loops).** `get_fill()` and friends copy the whole lattice
+(~1 MB at L=5), so `get_fill()[idx]` inside a loop is O(n²). Measured 0.24 µs vs 342 µs per
+access — **1422×**. Use: `fill_at(idx)`, `set_fill_at(idx, v)`, `is_solid_at(idx)`,
+`material_at(idx)`, `set_material_at(idx, v)`, `deposit_at(idx)`, `set_deposit_at(idx, v)`,
+`corruption_at(idx)`, `set_corruption_at(idx, v)`, `shell_removed_at(shell)`,
+`shell_initial_solid_at(shell)`, `shell_count()`, `shell_name(shell)`, `mat_color_at(material)`,
+`material_count()`, `material_at_index(i)`, `deposit_count()`, `deposit_at_index(i)`,
+`add_deposit(material_index, shell)`, `dirty_patch_at(i)`, `clear_dirty_patch(patch)`,
+`pending_ore_count()` / `pending_ore_material(i)` / `pending_ore_index(i)` / `clear_pending_ore()`,
+`newly_exposed_count()` / `newly_exposed_at(i)` / `clear_newly_exposed()`, and
+`first_open_neighbour(idx)` (row above first, then lateral; -1 if none). All are bounds-checked.
+
 **`PlanetCoreMesher`** — `build_patch(grid, patch)`, `build_faces(grid, face_begin, face_end)`,
 `get_vertices()`, `get_normals()`, `get_colors()`, `get_triangle_count()`. Results are
 non-indexed triangles in Godot's clockwise-front winding; the mesher is reusable across chunks.
@@ -84,7 +96,7 @@ non-indexed triangles in Godot's clockwise-front winding; the mesher is reusable
 `min_power`, `hardness`, `instant_threshold`, `ore`, `chunk_volume`, `chunk_mass`, `is_ore()`,
 `cuttable()`. **`PlanetCoreOre`** — `material`, `count_min`, `count_max`, `size_min`, `size_max`.
 **`PlanetCoreDeposit`** — `id`, `material_index`, `shell`, `cells`, `exposed`, `accum`, `mined`,
-`get_cell_count()`.
+`get_cell_count()`, `append_cell(idx)` (no full-list copy), `clear_cells()`.
 
 ## Equivalence
 

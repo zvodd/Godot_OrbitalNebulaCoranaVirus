@@ -13,6 +13,8 @@ void PlanetCoreDeposit::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_shell"), &PlanetCoreDeposit::get_shell);
 	ClassDB::bind_method(D_METHOD("set_cells", "cells"), &PlanetCoreDeposit::set_cells);
 	ClassDB::bind_method(D_METHOD("get_cells"), &PlanetCoreDeposit::get_cells);
+	ClassDB::bind_method(D_METHOD("append_cell", "idx"), &PlanetCoreDeposit::append_cell);
+	ClassDB::bind_method(D_METHOD("clear_cells"), &PlanetCoreDeposit::clear_cells);
 	ClassDB::bind_method(D_METHOD("get_cell_count"), &PlanetCoreDeposit::get_cell_count);
 	ClassDB::bind_method(D_METHOD("set_exposed", "exposed"), &PlanetCoreDeposit::set_exposed);
 	ClassDB::bind_method(D_METHOD("get_exposed"), &PlanetCoreDeposit::get_exposed);
@@ -35,6 +37,14 @@ void PlanetCoreDeposit::set_cells(const PackedInt32Array &p_cells) {
 	for (int64_t i = 0; i < p_cells.size(); i++) {
 		cells[(size_t)i] = p_cells[i];
 	}
+}
+
+void PlanetCoreDeposit::append_cell(int32_t idx) {
+	cells.push_back(idx);
+}
+
+void PlanetCoreDeposit::clear_cells() {
+	cells.clear();
 }
 
 PackedInt32Array PlanetCoreDeposit::get_cells() const {

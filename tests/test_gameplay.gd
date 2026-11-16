@@ -34,6 +34,10 @@ func _run() -> void:
 	var grid := planet.grid
 	rig.manual_control = false
 
+	print("core")
+	_check(planet.using_core_mesher, "planet runs on the C++ planet_core mesher")
+	_check(grid is PlanetCoreGridData, "grid is a PlanetCoreGridData (%s)" % grid.get_class())
+
 	print("scene")
 	_check(planet.chunks.size() == 320, "320 chunks")
 	_check(planet.triangle_count() > 50000, "planet meshed (%d tris, built in %d ms)" % [
@@ -63,17 +67,18 @@ func _run() -> void:
 	rig.select_laser(0)
 	await _frames(3)
 	var r0 := laser.hit_point.length()
-	var removed0 := grid.shell_removed[0]
+	var removed0: float = grid.shell_removed[0]
 	laser.active = true
 	await _frames(240)
 	var r1 := laser.hit_point.length()
-	_check(grid.shell_removed[0] > removed0 + 1.0, "4 s of Thermal removes sand (%.1f cells)" % (grid.shell_removed[0] - removed0))
+	var removed1: float = grid.shell_removed[0]
+	_check(removed1 > removed0 + 1.0, "4 s of Thermal removes sand (%.1f cells)" % (removed1 - removed0))
 	_check(r1 < r0 - 0.5, "the pit got deeper under the beam (r %.2f -> %.2f)" % [r0, r1])
 	_check(r1 > LaserCarve.min_cut_radius(rig.current_laser(), rig.orbit_radius) - 1.0, "...but not past the laser's reach")
 	# The pit should be as wide as the lens, not a pinhole: check a cell off-axis at the rim.
 	var side := sand_dir.cross(Vector3.UP).normalized()
-	var rim := grid.world_to_lattice(sand_dir * 31.0 + side * 1.2)
-	_check(grid.fill[rim] < PlanetGrid.ISO, "pit is beam-width at the rim (fill %.2f at 1.2 off-axis)" % grid.fill[rim])
+	var rim: int = grid.world_to_lattice(sand_dir * 31.0 + side * 1.2)
+	_check(not grid.is_solid_at(rim), "pit is beam-width at the rim (fill %.2f at 1.2 off-axis)" % grid.fill_at(rim))
 	_check(planet.dirty_count() < 8, "dirty chunks keep up with the frame budget (%d queued)" % planet.dirty_count())
 	laser.active = false
 
@@ -82,7 +87,7 @@ func _run() -> void:
 	planet.flush()
 	rig.aim_at(rock_dir)
 	await _frames(3)
-	var before := grid.shell_removed[0]
+	var before: float = grid.shell_removed[0]
 	laser.active = true
 	await _frames(60)
 	_check(grid.shell_removed[0] == before, "Thermal cannot cut rock")
@@ -112,7 +117,9 @@ func _run() -> void:
 	for c in field.get_children():
 		var cp: Vector3 = c.global_position
 		# Resting = above the core, below the rim, and sitting in an air cell near the pit.
-		if cp.length() > grid.core_surface_radius() and cp.length() < grid.surface_radius() + 2.0 				and grid.fill[grid.world_to_lattice(cp)] < PlanetGrid.ISO 				and cp.normalized().dot(ore_dir) > 0.97:
+		if cp.length() > grid.core_surface_radius() and cp.length() < grid.surface_radius() + 2.0 \
+				and not grid.is_solid_at(grid.world_to_lattice(cp)) \
+				and cp.normalized().dot(ore_dir) > 0.97:
 			resting += 1
 	_check(resting == field.live_count() and resting > 0, "chunks rest in the pit, not through the planet (%d of %d)" % [resting, field.live_count()])
 
@@ -131,28 +138,57 @@ func _run() -> void:
 	quit(1 if _fails > 0 else 0)
 
 
-func _mat(grid: PlanetGrid, mat_name: String) -> int:
-	for i in grid.materials.size():
-		if grid.materials[i].name == mat_name:
+func _mat(grid: RefCounted, mat_name: String) -> int:
+	var core := grid as PlanetCoreGridData
+	if core != null:
+		for i in core.material_count():
+			if core.material_at_index(i).get_name() == mat_name:
+				return i
+		return -1
+	var g := grid as PlanetGrid
+	for i in g.materials.size():
+		if g.materials[i].name == mat_name:
 			return i
 	return -1
 
 
 ## Make a solid patch of one material under `dir` so the test doesn't depend on the seed.
-func _paint(grid: PlanetGrid, dir: Vector3, mi: int, radius: float = 5.0) -> void:
-	var dep: Deposit = null
-	if grid.materials[mi].is_ore():
-		dep = Deposit.new()
-		dep.id = grid.deposits.size()
-		dep.material_index = mi
-		grid.deposits.append(dep)
+## Uses the indexed setters on the C++ grid: writing through `grid.fill[idx]` would need a
+## per-cell cache flush and is exactly the pattern the port exists to avoid.
+func _paint(grid: RefCounted, dir: Vector3, mi: int, radius: float = 5.0) -> void:
+	var core := grid as PlanetCoreGridData
+	var dep: RefCounted = null
+	var is_ore: bool = (core.material_at_index(mi) if core != null else (grid as PlanetGrid).materials[mi]).is_ore()
+	if is_ore:
+		dep = core.new_deposit(mi, 0) if core != null else _gd_deposit(grid)
 	for idx in grid.points_in_sphere(dir * 30.0, radius):
 		@warning_ignore("integer_division")
-		var k := idx / grid.V
+		var k: int = idx / grid.get_V()
 		if grid.is_diggable_row(k):
-			grid.fill[idx] = 1.0
-			grid.material[idx] = mi
-			grid.deposit[idx] = dep.id if dep != null else -1
-			if dep != null:
-				dep.cells.append(idx)
-			grid.touch(idx)
+			if core != null:
+				core.set_fill_at(idx, 1.0)
+				core.set_material_at(idx, mi)
+				core.set_deposit_at(idx, dep.get_id() if dep != null else -1)
+				if dep != null:
+					dep.append_cell(idx)
+			else:
+				var g := grid as PlanetGrid
+				g.fill[idx] = 1.0
+				g.material[idx] = mi
+				g.deposit[idx] = dep.id if dep != null else -1
+				if dep != null:
+					dep.cells.append(idx)
+			if core != null:
+				core.touch_cell(idx)
+			else:
+				grid.touch(idx)
+	if core != null:
+		core.flush()
+
+
+func _gd_deposit(grid: RefCounted) -> Deposit:
+	var g := grid as PlanetGrid
+	var dep := Deposit.new()
+	dep.id = g.deposits.size()
+	g.deposits.append(dep)
+	return dep
