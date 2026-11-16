@@ -1,6 +1,6 @@
 # Game Design Document — Nebula (working title)
 
-> Status: pre-production / MVP planning. Last updated 2026-11-15.
+> Status: pre-production / MVP planning. Last updated 2026-11-16.
 > Companion doc: [ROADMAP.md](ROADMAP.md) (technical design, milestones, task breakdown).
 > Anything marked **OPEN** is undecided — ask the designer, or use the stated default.
 
@@ -227,6 +227,9 @@ same tools; a "laser satellite" upgrade is literally another one of these.
 | 2026-11-15 | Crawlers corrupt ore around them over time instead of locking a whole deposit; death releases a plasma burst that cleanses non-permanent corruption; upgrades enlarge the burst. |
 | 2026-11-15 | First playable (M1–M4 core): all laser types and lenses are unlocked until the upgrade system exists; no fuel yet. Starting numbers live in `data/` and are untuned (sand currently digs fast with Thermal). |
 | 2026-11-15 | The beam cuts only exposed cells, so ore is always revealed before it is eaten. Crosshair is drawn where the beam lands, not at screen centre. |
+| 2026-11-16 | Meshing moves to a C++ GDExtension (`addons/planet_core/`) behind the existing pure-data contract, so it can be threaded later. Equivalence with the GDScript reference is a hard gate, not a tolerance to tune: the port reproduces GDScript's float32/float64 narrowing exactly, so positions come out **bit-identical** (max delta 0.0). Whole-planet meshing measured 820 ms → 27 ms (~31x). The GDScript classes stay as the reference implementation, so the port can always be diffed. |
+| 2026-11-16 | The extension's generator calls the engine's own `RandomNumberGenerator` + `FastNoiseLite` rather than reimplementing them, so the same seed produces the same planet (204 deposits, identical cells) in both implementations. This keeps saves portable across the port and makes the equivalence gate meaningful. |
+| 2026-11-16 | The extension is **pure data and resource-free**: a plain-data `PlanetCoreConfig` mirrors `PlanetDef`, built by `game/planet/planet_core.gd`. Godot `Resource`s stay a GDScript concern, which keeps the C++ side independent of the data-driven layer and safe to thread. |
 
 ## 10. Open questions
 

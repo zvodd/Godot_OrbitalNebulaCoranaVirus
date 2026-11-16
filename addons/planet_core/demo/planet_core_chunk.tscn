@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://addons/planet_core/demo/planet_core_chunk.gd" id="1"]
+
+[node name="PlanetCoreChunkDemo" type="Node3D"]
+script = ExtResource("1")
+patch = 0
+planet_seed = 42
+show_mesh = true

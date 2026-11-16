@@ -1,0 +1,16 @@
+# Build outputs — rebuild with `scons platform=linux target=template_debug -j4`
+bin/
+*.so
+*.dll
+*.dylib
+*.a
+*.o
+*.os
+*.obj
+*.pdb
+
+# godot-cpp generated bindings and SCons state
+src/gen/
+.sconsign.dblite
+.sconf_temp/
+config.log
