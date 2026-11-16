@@ -101,13 +101,16 @@ func _process(delta: float) -> void:
 			LaserCarve.cell_power(lt, lens, laser.power_mult),
 			LaserCarve.min_cut_radius(lt, rig.orbit_radius, laser.reach_bonus)])
 	lines.append(_target_line(grid, laser))
-	var shell := mini(grid.outermost_intact_shell, grid.def.shells.size() - 1)
+	# The C++ grid keeps shell/cleared bookkeeping too; both expose scalar accessors, so read
+	# through them instead of copying a table per frame.
+	var shell_count := _shell_count(grid)
+	var shell := mini(_outermost_shell(grid), shell_count - 1)
 	lines.append("Shell %d  %s:  %.1f%% cleared" % [
-		shell + 1, grid.def.shells[shell].name, grid.cleared_fraction(shell) * 100.0])
+		shell + 1, _shell_name(grid, shell), _cleared_fraction(grid, shell) * 100.0])
 	_info.text = "\n".join(lines)
 
 	var ore_lines: Array[String] = ["ORE COLLECTED"]
-	for m in grid.materials:
+	for m: MaterialDef in planet.planet_def_materials():
 		if m.is_ore():
 			ore_lines.append("%s: %d" % [m.name, int(collector.totals.get(m.ore_id, 0.0))])
 	ore_lines.append("")
@@ -127,11 +130,11 @@ func _process(delta: float) -> void:
 		])
 
 
-func _target_line(grid: PlanetGrid, laser: Laser) -> String:
+func _target_line(grid: RefCounted, laser: Laser) -> String:
 	if not laser.has_hit:
 		return "Target: -"
-	var mat_name := grid.materials[laser.aimed_material].name if laser.aimed_material >= 0 else "?"
-	var depth := grid.shell_top_radius(0) - planet.to_local(laser.hit_point).length()
+	var mat_name := _material_name(grid, laser.aimed_material)
+	var depth: float = grid.shell_top_radius(0) - planet.to_local(laser.hit_point).length()
 	var line := "Target: %s    depth %.1f" % [mat_name, maxf(depth, 0.0)]
 	var res := laser.last_result
 	if res == null:
@@ -141,7 +144,57 @@ func _target_line(grid: PlanetGrid, laser: Laser) -> String:
 	if res.blocked != LaserCarve.Block.NONE:
 		var why: String = BLOCK_TEXT[res.blocked]
 		if res.blocked == LaserCarve.Block.TOO_HARD and res.blocked_material >= 0:
-			var m := grid.materials[res.blocked_material]
-			why += " (%s needs %.1f, have %.1f)" % [m.name, m.min_power, res.cell_power]
+			why += " (%s needs %.1f, have %.1f)" % [
+				_material_name(grid, res.blocked_material),
+				_min_power(grid, res.blocked_material), res.cell_power]
 		return line + "    " + why
 	return line
+
+
+# --- grid accessors ----------------------------------------------------------
+# `grid` is a PlanetCoreGridData (C++) in the shipped game or a PlanetGrid in the fallback.
+# The C++ getters copy whole arrays, so scalar reads go through the indexed accessors.
+
+func _shell_count(grid: RefCounted) -> int:
+	var core := grid as PlanetCoreGridData
+	return core.shell_count() if core != null else (grid as PlanetGrid).def.shells.size()
+
+
+func _outermost_shell(grid: RefCounted) -> int:
+	var core := grid as PlanetCoreGridData
+	return core.get_outermost_intact_shell() if core != null else (grid as PlanetGrid).outermost_intact_shell
+
+
+func _shell_name(grid: RefCounted, shell: int) -> String:
+	var core := grid as PlanetCoreGridData
+	if core != null:
+		return core.shell_name(shell)
+	var g := grid as PlanetGrid
+	return g.def.shells[shell].name if shell >= 0 and shell < g.def.shells.size() else ""
+
+
+func _cleared_fraction(grid: RefCounted, shell: int) -> float:
+	var core := grid as PlanetCoreGridData
+	if core != null:
+		return core.cleared_fraction(shell)
+	return (grid as PlanetGrid).cleared_fraction(shell)
+
+
+func _material_name(grid: RefCounted, mi: int) -> String:
+	if mi < 0:
+		return "?"
+	var core := grid as PlanetCoreGridData
+	if core != null:
+		var m := core.material_at_index(mi)
+		return m.get_name() if m != null else "?"
+	var g := grid as PlanetGrid
+	return g.materials[mi].name if mi < g.materials.size() else "?"
+
+
+func _min_power(grid: RefCounted, mi: int) -> float:
+	var core := grid as PlanetCoreGridData
+	if core != null:
+		var m := core.material_at_index(mi)
+		return m.get_min_power() if m != null else 0.0
+	var g := grid as PlanetGrid
+	return g.materials[mi].min_power if mi < g.materials.size() else 0.0

@@ -115,7 +115,7 @@ func _physics_process(delta: float) -> void:
 	_show(true, true)
 	var cutting := last_result.removed > 0.0
 	var mi := last_result.cut_material if cutting else aimed_material
-	var col := grid.mat_colors[mi] if mi >= 0 else Color.WHITE
+	var col: Color = _spark_color(grid, mi)
 	_sparks.global_position = hit_point - dir * 0.2
 	_sparks.direction = -dir
 	_sparks.color = col.lightened(0.25) if cutting else Color(0.6, 0.6, 0.6)
@@ -127,19 +127,42 @@ func _physics_process(delta: float) -> void:
 	_glow.light_energy = 2.5 if cutting else 0.8
 
 
+## Material colour for the spark tint. Indexed on the C++ grid so it does not copy the table.
+func _spark_color(grid: RefCounted, mi: int) -> Color:
+	if mi < 0:
+		return Color.WHITE
+	var core := grid as PlanetCoreGridData
+	if core != null:
+		return core.mat_color_at(mi)
+	return (grid as PlanetGrid).mat_colors[mi]
+
+
 ## Material of the solid cell nearest to just below the hit.
 func _material_at(local_hit: Vector3, local_dir: Vector3) -> int:
-	var grid := planet.grid
+	return _nearest_material(planet.grid, local_hit + local_dir * 0.4)
+
+
+func _nearest_material(grid: RefCounted, probe: Vector3) -> int:
 	var best := -1
 	var best_d := INF
-	var probe := local_hit + local_dir * 0.4
-	for idx in grid.points_in_sphere(probe, 1.3):
-		if grid.fill[idx] >= PlanetGrid.ISO:
-			var d := grid.lattice_pos(idx).distance_squared_to(probe)
+	var core := grid as PlanetCoreGridData
+	if core != null:
+		# fill_at / material_at are single-cell reads; grid.fill[idx] would copy the lattice.
+		for idx in core.points_in_sphere(probe, 1.3):
+			if core.is_solid_at(idx):
+				var d := core.lattice_pos(idx).distance_squared_to(probe)
+				if d < best_d:
+					best_d = d
+					best = idx
+		return core.material_at(best) if best >= 0 else -1
+	var g := grid as PlanetGrid
+	for idx in g.points_in_sphere(probe, 1.3):
+		if g.fill[idx] >= PlanetGrid.ISO:
+			var d := g.lattice_pos(idx).distance_squared_to(probe)
 			if d < best_d:
 				best_d = d
 				best = idx
-	return grid.material[best] if best >= 0 else -1
+	return g.material[best] if best >= 0 else -1
 
 
 func _place_beam(from: Vector3, to: Vector3) -> void:

@@ -63,7 +63,7 @@ func _physics_process(_delta: float) -> void:
 	if planet == null or planet.grid == null:
 		return
 	# Safety net: anything that got under the core or flung away is lost.
-	var floor_r := planet.grid.core_surface_radius() - 2.0
+	var floor_r: float = planet.grid.core_surface_radius() - 2.0
 	for c in get_children():
 		var r := (c as Node3D).global_position.length()
 		if r < floor_r or r > 300.0:

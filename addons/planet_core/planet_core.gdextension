@@ -1,0 +1,10 @@
+[configuration]
+
+entry_symbol = "planet_core_library_init"
+compatibility_minimum = "4.7"
+reloadable = true
+
+[libraries]
+
+linux.debug.x86_64 = "res://addons/planet_core/bin/libplanet_core.linux.template_debug.x86_64.so"
+linux.release.x86_64 = "res://addons/planet_core/bin/libplanet_core.linux.template_release.x86_64.so"
